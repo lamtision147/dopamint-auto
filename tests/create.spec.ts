@@ -56,7 +56,7 @@ test.describe('Create NFT Flow', () => {
 
         // Upload image
         console.log('\n========== PHASE 3: UPLOAD IMAGE ==========');
-        const testImagePath = path.resolve(__dirname, '../test-assets/test-image.png');
+        const testImagePath = path.resolve(__dirname, '../test-assets/test-image-create.png');
         await createPage.uploadImage(testImagePath);
 
         // STEP 3: Generate image

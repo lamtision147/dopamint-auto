@@ -58,7 +58,12 @@ echo.
 echo Running Playwright tests...
 echo Running tests... >> %LOGFILE%
 
-call npx playwright test tests/%TEST_FILE% --reporter=list 2>&1 >> %LOGFILE%
+if /i "%TEST_FILE%"=="all" (
+    echo Running all tests...
+    call npx playwright test tests/ --reporter=list 2>&1 >> %LOGFILE%
+) else (
+    call npx playwright test tests/%TEST_FILE% --reporter=list 2>&1 >> %LOGFILE%
+)
 set TEST_EXIT_CODE=%errorlevel%
 
 :: Record end time and calculate duration
