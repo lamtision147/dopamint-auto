@@ -1,0 +1,13 @@
+# ========================================
+# Dopamint Auto Test Configuration
+# ========================================
+
+# Test file to run (relative to tests/ folder)
+# Options:
+#   - dopamintLogin.spec.ts  (Login test only)
+#   - create.spec.ts         (Full create NFT flow)
+#   - *.spec.ts              (Run all tests)
+TEST_FILE=create.spec.ts
+
+# Test name for Telegram notification
+TEST_NAME=Create NFT

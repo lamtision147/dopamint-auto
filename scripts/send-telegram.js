@@ -112,15 +112,45 @@ function sendTelegramPhoto(photoPath, caption) {
     });
 }
 
+// Get all screenshots from test-results folder
+function getAllScreenshots() {
+    const testResultsDir = path.join(__dirname, '..', 'test-results');
+    if (!fs.existsSync(testResultsDir)) return [];
+
+    const files = fs.readdirSync(testResultsDir);
+    return files
+        .filter(f => f.endsWith('.png'))
+        .map(f => path.join(testResultsDir, f))
+        .sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime); // Sort by newest
+}
+
+// Read collection URL from file (saved by test)
+function getCollectionUrl() {
+    const urlFile = path.join(__dirname, '..', 'test-results', 'collection-url.txt');
+    if (fs.existsSync(urlFile)) {
+        return fs.readFileSync(urlFile, 'utf8').trim();
+    }
+    return null;
+}
+
+// Format duration from seconds to human readable
+function formatDuration(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    if (mins > 0) {
+        return `${mins}m ${secs}s`;
+    }
+    return `${secs}s`;
+}
+
 // Main function
 async function main() {
     const args = process.argv.slice(2);
     const status = args[0] || 'UNKNOWN';
     const duration = args[1] || '0';
     const testName = args[2] || 'Dopamint Test';
-    const screenshotPath = args[3] || '';
 
-    const timestamp = new Date().toLocaleString('vi-VN', { 
+    const timestamp = new Date().toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
         year: 'numeric',
         month: '2-digit',
@@ -132,27 +162,49 @@ async function main() {
 
     const emoji = status === 'PASSED' ? '✅' : '❌';
     const statusText = status === 'PASSED' ? 'PASSED' : 'FAILED';
-    
-    const message = `
+    const formattedDuration = formatDuration(parseFloat(duration));
+
+    // Get collection URL if exists
+    const collectionUrl = getCollectionUrl();
+
+    let message = `
 ${emoji} <b>DOPAMINT AUTO TEST</b>
 
 📋 Test: ${testName}
 📅 Time: ${timestamp}
 📊 Status: <b>${statusText}</b>
-⏱ Duration: ${duration}s
+⏱ Duration: ${formattedDuration}
+`.trim();
 
-🤖 Automated by Playwright
-    `.trim();
+    // Add URL if exists
+    if (collectionUrl) {
+        message += `\n\n🔗 Collection: ${collectionUrl}`;
+    }
+
+    message += `\n\n🤖 Automated by Playwright`;
 
     try {
         await sendTelegramMessage(message);
         console.log('✅ Telegram message sent!');
 
-        // Send screenshot if exists
-        if (screenshotPath && fs.existsSync(screenshotPath)) {
-            await sendTelegramPhoto(screenshotPath, `📸 Screenshot: ${testName}`);
-            console.log('✅ Screenshot sent!');
+        // Send all screenshots
+        const screenshots = getAllScreenshots();
+        console.log(`Found ${screenshots.length} screenshots`);
+
+        for (let i = 0; i < screenshots.length; i++) {
+            const screenshot = screenshots[i];
+            const filename = path.basename(screenshot, '.png');
+            try {
+                await sendTelegramPhoto(screenshot, `📸 ${i + 1}/${screenshots.length}: ${filename}`);
+                console.log(`✅ Sent: ${filename}`);
+                // Small delay between photos to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (err) {
+                console.error(`❌ Failed to send ${filename}:`, err.message);
+            }
         }
+
+        console.log('✅ All done!');
     } catch (error) {
         console.error('❌ Failed to send Telegram:', error.message);
         process.exit(1);

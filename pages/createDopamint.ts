@@ -619,6 +619,12 @@ export class DopamintCreatePage {
         await newPage.screenshot({ path: 'test-results/collection-page.png' });
         console.log('✅ Screenshot of collection page saved!');
 
+        // Save collection URL to file for Telegram notification
+        const collectionUrl = newPage.url();
+        const fs = await import('fs');
+        fs.writeFileSync('test-results/collection-url.txt', collectionUrl);
+        console.log(`✅ Collection URL saved: ${collectionUrl}`);
+
         // Return the new page for further actions
         return newPage;
     }
