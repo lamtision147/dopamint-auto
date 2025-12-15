@@ -99,7 +99,7 @@ if exist "test-results\dopamint-metamask-connected.png" (
 :: Send Telegram notification
 echo.
 echo Sending Telegram notification...
-node scripts/send-telegram.js %STATUS% %DURATION% "%TEST_NAME%"
+node scripts/send-telegram.js %STATUS% %DURATION% "%TEST_NAME%" "%TEST_FILE%"
 
 echo.
 echo ========================================

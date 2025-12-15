@@ -149,6 +149,7 @@ async function main() {
     const status = args[0] || 'UNKNOWN';
     const duration = args[1] || '0';
     const testName = args[2] || 'Dopamint Test';
+    const testFile = args[3] || '';
 
     const timestamp = new Date().toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
@@ -171,6 +172,7 @@ async function main() {
 ${emoji} <b>DOPAMINT AUTO TEST</b>
 
 📋 Test: ${testName}
+📁 File: <code>${testFile}</code>
 📅 Time: ${timestamp}
 📊 Status: <b>${statusText}</b>
 ⏱ Duration: ${formattedDuration}
