@@ -5,6 +5,7 @@ blob-report/
 playwright/.cache/
 .env
 .env.*
+!.env.*.example
 metamask-data/
 *.log
 
