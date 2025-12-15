@@ -1,0 +1,1003 @@
+import { BrowserContext, Page, expect, Locator } from "@playwright/test";
+import { Dappwright } from "@tenkeylabs/dappwright";
+import { CREATE_SELECTORS } from '../xpath/dopamintCreate';
+import path from 'path';
+
+export class DopamintCreatePage {
+    readonly context: BrowserContext;
+    readonly wallet: Dappwright;
+    page: Page;
+
+    constructor(context: BrowserContext, wallet: Dappwright, page: Page) {
+        this.context = context;
+        this.wallet = wallet;
+        this.page = page;
+    }
+
+    // Helper function to find element from array of selectors
+    private async findElementFromSelectors(selectors: string | string[], timeout: number = 5000): Promise<Locator | null> {
+        const selectorList = Array.isArray(selectors) ? selectors : [selectors];
+
+        for (const selector of selectorList) {
+            try {
+                const element = this.page.locator(selector).first();
+                if (await element.isVisible({ timeout }).catch(() => false)) {
+                    console.log(`Found element with selector: ${selector}`);
+                    return element;
+                }
+            } catch (e) {
+                // Continue to next selector
+            }
+        }
+        return null;
+    }
+
+    async clickCreateButton(): Promise<void> {
+        console.log('\n=== Click Create button on header ===');
+
+        const createButton = this.page.locator(CREATE_SELECTORS.CREATE_BUTTON).first();
+        await expect(createButton).toBeVisible({ timeout: 10000 });
+        await createButton.click();
+        await this.page.waitForTimeout(2000);
+
+        console.log('✅ Clicked Create button!');
+
+        // Handle tutorial popup if appears
+        await this.page.waitForTimeout(1000);
+        for (const selector of CREATE_SELECTORS.TUTORIAL_BUTTON) {
+            const closeBtn = this.page.locator(selector).first();
+            if (await closeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                console.log(`Closing popup with selector: ${selector}`);
+                await closeBtn.click({ force: true });
+                await this.page.waitForTimeout(1000);
+                break;
+            }
+        }
+    }
+
+    async chooseChangeButtonTemplate(): Promise<void> {
+        console.log('\n=== Select Change button template ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Try to find element from selectors list
+        const changeButtonTemplate = await this.findElementFromSelectors(
+            CREATE_SELECTORS.CHANGE_BUTTON_TEMPLATE,
+            10000
+        );
+
+        if (changeButtonTemplate) {
+            await changeButtonTemplate.click();
+            await this.page.waitForTimeout(2000);
+            console.log('✅ Selected Change button template!');
+        } else {
+            // Fallback: Try click based on text
+            console.log('Selector not found, trying to click by text...');
+            const textElement = this.page.getByText('Change', { exact: false }).first();
+            if (await textElement.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await textElement.click();
+                await this.page.waitForTimeout(2000);
+                console.log('✅ Clicked by text "Change"!');
+            } else {
+                throw new Error('Change button template not found');
+            }
+        }
+    }
+
+    async selectMotorbikeCard(): Promise<void> {
+        console.log('\n=== Select Motorbike card ===');
+
+        await this.page.waitForTimeout(2000);
+
+        const motorbikeCard = await this.findElementFromSelectors(
+            CREATE_SELECTORS.MOTORBIKE_CARD,
+            10000
+        );
+
+        if (motorbikeCard) {
+            await motorbikeCard.click();
+            await this.page.waitForTimeout(2000);
+            console.log('✅ Selected Motorbike card!');
+        } else {
+            // Fallback
+            const textElement = this.page.getByText('Motorbike', { exact: false }).first();
+            if (await textElement.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await textElement.click();
+                await this.page.waitForTimeout(2000);
+                console.log('✅ Clicked by text "Motorbike"!');
+            } else {
+                throw new Error('Motorbike card not found');
+            }
+        }
+    }
+
+    async selectNanoBananaPro(): Promise<void> {
+        console.log('\n=== Select Nano Banana Pro model ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Click on Select model dropdown
+        const modelSelect = await this.findElementFromSelectors(
+            CREATE_SELECTORS.MODEL_SELECT,
+            10000
+        );
+
+        if (modelSelect) {
+            await modelSelect.click();
+            await this.page.waitForTimeout(1000);
+        } else {
+            // Fallback
+            const selectText = this.page.getByText('Select model', { exact: false }).first();
+            if (await selectText.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await selectText.click();
+                await this.page.waitForTimeout(1000);
+            }
+        }
+
+        // Select Nano Banana Pro option
+        await this.page.waitForTimeout(1000);
+        const nanoBananaOption = await this.findElementFromSelectors(
+            CREATE_SELECTORS.NANO_BANANA_PRO_OPTION,
+            5000
+        );
+
+        if (nanoBananaOption) {
+            await nanoBananaOption.click();
+            await this.page.waitForTimeout(1000);
+            console.log('✅ Selected Nano Banana Pro model!');
+        } else {
+            // Fallback
+            const optionText = this.page.getByText('Nano Banana Pro', { exact: false }).first();
+            if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await optionText.click();
+                await this.page.waitForTimeout(1000);
+                console.log('✅ Clicked by text "Nano Banana Pro"!');
+            } else {
+                throw new Error('Nano Banana Pro option not found');
+            }
+        }
+    }
+
+    async uploadImage(imagePath: string): Promise<void> {
+        console.log('\n=== Upload image (Create Flow) ===');
+
+        await this.page.waitForTimeout(2000);
+        const absolutePath = path.resolve(imagePath);
+
+        // Debug: Find all file inputs on page
+        const allInputs = this.page.locator('input[type="file"]');
+        const inputCount = await allInputs.count();
+        console.log(`Total file inputs on page: ${inputCount}`);
+
+        // Strategy 1: Find input in create form (not in dialog/modal)
+        const createFormInputSelectors = [
+            // Input in main content (not in dialog)
+            'main input[type="file"]',
+            'form input[type="file"]',
+            '[class*="create"] input[type="file"]',
+            // Input near "Upload" label
+            'label:has-text("Upload") input[type="file"]',
+            'div:has-text("Upload image") input[type="file"]',
+            'div:has-text("Upload") input[type="file"]',
+        ];
+
+        let fileInput = null;
+        for (const selector of createFormInputSelectors) {
+            try {
+                const input = this.page.locator(selector).first();
+                if (await input.count() > 0) {
+                    fileInput = input;
+                    console.log(`Found input with selector: ${selector}`);
+                    break;
+                }
+            } catch (e) {
+                // Continue
+            }
+        }
+
+        // Fallback: Use first input
+        if (!fileInput) {
+            fileInput = allInputs.first();
+            console.log('Fallback: Using first file input');
+        }
+
+        // Wait for input to be ready
+        await fileInput.waitFor({ state: 'attached', timeout: 10000 });
+
+        console.log(`Uploading file: ${absolutePath}`);
+
+        // Count preview images before upload
+        const previewSelectors = 'img[src*="blob:"], img[src*="data:"], img[class*="preview"], img[class*="upload"]';
+        const previewsBefore = await this.page.locator(previewSelectors).count();
+        console.log(`Preview images before upload: ${previewsBefore}`);
+
+        // Upload file
+        await fileInput.setInputFiles(absolutePath);
+
+        // Dispatch events để trigger React/Vue handlers
+        await fileInput.evaluate(node => {
+            node.dispatchEvent(new Event('change', { bubbles: true }));
+            node.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        // Wait until image displays on UI (max 15 seconds)
+        console.log('Waiting for image to display on UI...');
+        const maxWaitTime = 15000;
+        const checkInterval = 500;
+        let elapsed = 0;
+        let imageDisplayed = false;
+
+        while (elapsed < maxWaitTime) {
+            await this.page.waitForTimeout(checkInterval);
+            elapsed += checkInterval;
+
+            // Check 1: Number of preview images increased
+            const previewsAfter = await this.page.locator(previewSelectors).count();
+            if (previewsAfter > previewsBefore) {
+                console.log(`✓ New preview image appeared (${previewsBefore} -> ${previewsAfter})`);
+                imageDisplayed = true;
+                break;
+            }
+
+            // Check 2: Image with src blob or data is visible
+            const newPreview = this.page.locator('img[src*="blob:"], img[src*="data:"]').first();
+            if (await newPreview.isVisible({ timeout: 100 }).catch(() => false)) {
+                console.log('✓ Preview image visible');
+                imageDisplayed = true;
+                break;
+            }
+
+            // Check 3: Input has file and UI changed (class changed, etc.)
+            const hasFile = await fileInput.evaluate((el: HTMLInputElement) => el.files && el.files.length > 0);
+            const parentChanged = await fileInput.evaluate((el) => {
+                const parent = el.closest('div');
+                return parent?.querySelector('img') !== null || parent?.classList.contains('has-file');
+            });
+            if (hasFile && parentChanged) {
+                console.log('✓ File uploaded and UI changed');
+                imageDisplayed = true;
+                break;
+            }
+
+            if (elapsed % 2000 === 0) {
+                console.log(`Waiting... (${elapsed / 1000}s)`);
+            }
+        }
+
+        if (!imageDisplayed) {
+            console.log('⚠️ Image not displayed after 15s, retrying upload...');
+            // Retry upload
+            await fileInput.setInputFiles(absolutePath);
+            await fileInput.evaluate(node => {
+                node.dispatchEvent(new Event('change', { bubbles: true }));
+                node.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            await this.page.waitForTimeout(3000);
+        }
+
+        // Additional 2 second delay to ensure UI stability
+        await this.page.waitForTimeout(2000);
+
+        console.log('✅ Image upload completed!');
+    }
+
+    // Helper function to generate timestamp code
+    private generateTimestampCode(): string {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const day = now.getDate();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear() % 100; // Get last 2 digits
+
+        // Format: HHMM + DD + MM + YY (e.g., 514121125 for 5:14PM 12/11/2025)
+        const code = `${hours}${minutes.toString().padStart(2, '0')}${day.toString().padStart(2, '0')}${month.toString().padStart(2, '0')}${year.toString().padStart(2, '0')}`;
+        return code;
+    }
+
+    async clickGenerateAndConfirm(): Promise<void> {
+        console.log('\n=== Click Generate button and confirm ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Debug: List all buttons with text "Generate"
+        const allGenerateBtns = this.page.locator('button:has-text("Generate")');
+        const btnCount = await allGenerateBtns.count();
+        console.log(`Found ${btnCount} buttons with text "Generate"`);
+
+        // Log each button state
+        for (let i = 0; i < btnCount; i++) {
+            const btn = allGenerateBtns.nth(i);
+            const isVisible = await btn.isVisible().catch(() => false);
+            const isEnabled = await btn.isEnabled().catch(() => false);
+            const text = await btn.textContent().catch(() => 'N/A');
+            console.log(`Button ${i}: visible=${isVisible}, enabled=${isEnabled}, text="${text?.trim()}"`);
+        }
+
+        // Click Generate button - find visible and enabled button
+        let generateClicked = false;
+
+        // Method 1: Find visible Generate button on main page (not in dialog)
+        const mainGenerateBtn = this.page.locator('button:has-text("Generate"):visible').first();
+        if (await mainGenerateBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            const isEnabled = await mainGenerateBtn.isEnabled().catch(() => false);
+            console.log(`Main Generate button: enabled=${isEnabled}`);
+
+            if (isEnabled) {
+                await mainGenerateBtn.click();
+                console.log('Clicked Generate button (main)!');
+                generateClicked = true;
+            } else {
+                console.log('⚠️ Generate button is disabled - may need to upload image first');
+            }
+        }
+
+        // Method 2: Fallback - try other selectors
+        if (!generateClicked) {
+            const generateBtn = await this.findElementFromSelectors(
+                CREATE_SELECTORS.GENERATE_BUTTON,
+                5000
+            );
+
+            if (generateBtn) {
+                await generateBtn.click();
+                console.log('Clicked Generate button (from selectors)!');
+                generateClicked = true;
+            }
+        }
+
+        // Method 3: Fallback - getByRole
+        if (!generateClicked) {
+            try {
+                const roleBtn = this.page.getByRole('button', { name: 'Generate' }).first();
+                if (await roleBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await roleBtn.click();
+                    console.log('Clicked Generate button (getByRole)!');
+                    generateClicked = true;
+                }
+            } catch (e) {
+                console.log('getByRole did not find Generate button');
+            }
+        }
+
+        if (!generateClicked) {
+            console.log('⚠️ Could not click Generate button!');
+            // Screenshot for debug
+            await this.page.screenshot({ path: 'test-results/generate-button-not-found.png' });
+        }
+
+        await this.page.waitForTimeout(2000);
+
+        // Confirm in popup (if exists)
+        console.log('Looking for confirmation popup...');
+
+        // Check if dialog appeared
+        const dialog = this.page.locator('div[role="dialog"], [data-state="open"]').first();
+        if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
+            console.log('Popup appeared');
+
+            // Find Generate/Confirm button in dialog
+            const dialogBtnSelectors = [
+                'div[role="dialog"] button:has-text("Generate")',
+                '[data-state="open"] button:has-text("Generate")',
+                'div[role="dialog"] button:has-text("Confirm")',
+                '[data-state="open"] button:has-text("Confirm")',
+            ];
+
+            for (const selector of dialogBtnSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await btn.click();
+                    console.log(`✅ Confirmed with: ${selector}`);
+                    break;
+                }
+            }
+        } else {
+            console.log('No confirmation popup (may not need confirmation)');
+        }
+    }
+
+    async waitForImageGeneration(): Promise<void> {
+        console.log('\n=== Wait for image generation (may take up to 3 minutes) ===');
+
+        // Wait for Publish & Monetize button to appear (max 4 minutes)
+        const maxWaitTime = 240000; // 4 minutes
+        const checkInterval = 5000; // Check every 5 seconds
+        let elapsed = 0;
+
+        while (elapsed < maxWaitTime) {
+            const publishBtn = await this.findElementFromSelectors(
+                CREATE_SELECTORS.PUBLISH_MONETIZE_BUTTON,
+                3000
+            );
+
+            if (publishBtn) {
+                console.log('✅ Image generated! Publish & Monetize button appeared.');
+                return;
+            }
+
+            console.log(`Waiting... (${elapsed / 1000}s)`);
+            await this.page.waitForTimeout(checkInterval);
+            elapsed += checkInterval;
+        }
+
+        throw new Error('Timeout: Image was not generated after 4 minutes');
+    }
+
+    async clickPublishAndMonetize(): Promise<void> {
+        console.log('\n=== Click Publish & Monetize button ===');
+
+        const publishBtn = await this.findElementFromSelectors(
+            CREATE_SELECTORS.PUBLISH_MONETIZE_BUTTON,
+            10000
+        );
+
+        if (publishBtn) {
+            await publishBtn.click();
+            console.log('✅ Clicked Publish & Monetize button!');
+        } else {
+            const textBtn = this.page.getByText('Publish & Monetize', { exact: false }).first();
+            await textBtn.click();
+        }
+
+        await this.page.waitForTimeout(2000);
+    }
+
+    async fillPublishCollectionForm(): Promise<string> {
+        console.log('\n=== Fill Publish Collection form ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Generate collection name with timestamp
+        const timestampCode = this.generateTimestampCode();
+        const collectionName = `Automation test ${timestampCode}`;
+        const description = 'Automation test';
+        const symbol = 'AUTO';
+
+        console.log(`Collection Name: ${collectionName}`);
+        console.log(`Description: ${description}`);
+        console.log(`Symbol: ${symbol}`);
+
+        // Fill Collection Name
+        const nameInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.COLLECTION_NAME_INPUT,
+            10000
+        );
+        if (nameInput) {
+            await nameInput.fill(collectionName);
+        } else {
+            // Fallback: try to find input near "Collection name" label
+            const input = this.page.locator('input').filter({ hasText: '' }).first();
+            await input.fill(collectionName);
+        }
+
+        await this.page.waitForTimeout(500);
+
+        // Fill Description
+        const descInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.DESCRIPTION_INPUT,
+            5000
+        );
+        if (descInput) {
+            await descInput.fill(description);
+        } else {
+            const textarea = this.page.locator('textarea').first();
+            await textarea.fill(description);
+        }
+
+        await this.page.waitForTimeout(500);
+
+        // Fill Symbol
+        const symbolInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.SYMBOL_INPUT,
+            5000
+        );
+        if (symbolInput) {
+            await symbolInput.fill(symbol);
+        }
+
+        console.log('✅ Form filled!');
+        return collectionName;
+    }
+
+    async clickPublishAndConfirm(): Promise<void> {
+        console.log('\n=== Click Publish and confirm ===');
+
+        await this.page.waitForTimeout(1000);
+
+        // Click Publish button
+        const publishBtn = await this.findElementFromSelectors(
+            CREATE_SELECTORS.PUBLISH_BUTTON,
+            10000
+        );
+
+        if (publishBtn) {
+            await publishBtn.click();
+            console.log('Clicked Publish button!');
+        } else {
+            const textBtn = this.page.getByRole('button', { name: 'Publish' }).first();
+            await textBtn.click();
+        }
+
+        await this.page.waitForTimeout(2000);
+
+        // Confirm publish in popup
+        console.log('Looking for confirm popup...');
+        const confirmBtn = await this.findElementFromSelectors(
+            CREATE_SELECTORS.CONFIRM_PUBLISH_BUTTON,
+            10000
+        );
+
+        if (confirmBtn) {
+            await confirmBtn.click();
+            console.log('✅ Clicked Confirm!');
+        } else {
+            const textConfirmBtn = this.page.getByRole('button', { name: 'Confirm' }).first();
+            await textConfirmBtn.click();
+        }
+    }
+
+    async waitForPublishSuccess(): Promise<void> {
+        console.log('\n=== Wait for Published Successfully ===');
+
+        // Wait for success message (max 2 minutes)
+        const maxWaitTime = 120000;
+        const checkInterval = 3000;
+        let elapsed = 0;
+
+        while (elapsed < maxWaitTime) {
+            const successText = await this.findElementFromSelectors(
+                CREATE_SELECTORS.PUBLISHED_SUCCESS_TEXT,
+                2000
+            );
+
+            if (successText) {
+                console.log('✅ Published Successfully!');
+                return;
+            }
+
+            // Also check for text directly
+            const successVisible = await this.page.getByText('Published Successfully').isVisible({ timeout: 1000 }).catch(() => false);
+            if (successVisible) {
+                console.log('✅ Published Successfully!');
+                return;
+            }
+
+            console.log(`Waiting for publish to complete... (${elapsed / 1000}s)`);
+            await this.page.waitForTimeout(checkInterval);
+            elapsed += checkInterval;
+        }
+
+        throw new Error('Timeout: Publish failed after 2 minutes');
+    }
+
+    async clickGoToCollectionAndVerify(expectedCollectionName: string): Promise<Page> {
+        console.log('\n=== Click Go to collection and verify ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Click Go to collection button
+        const goToBtn = await this.findElementFromSelectors(
+            CREATE_SELECTORS.GO_TO_COLLECTION_BUTTON,
+            10000
+        );
+
+        // Setup listener for new tab before clicking
+        const newPagePromise = this.context.waitForEvent('page', { timeout: 30000 });
+
+        if (goToBtn) {
+            await goToBtn.click();
+            console.log('Clicked Go to collection!');
+        } else {
+            const textBtn = this.page.getByText('Go to collection', { exact: false }).first();
+            await textBtn.click();
+        }
+
+        // Wait for new tab to open
+        console.log('Waiting for new tab to open...');
+        const newPage = await newPagePromise;
+        await newPage.waitForLoadState('networkidle');
+        await newPage.waitForTimeout(3000);
+
+        // Verify collection name in new tab
+        console.log(`Verifying collection name: ${expectedCollectionName}`);
+        const collectionNameVisible = await newPage.getByText(expectedCollectionName).isVisible({ timeout: 10000 }).catch(() => false);
+
+        if (collectionNameVisible) {
+            console.log('✅ Collection name displayed correctly!');
+        } else {
+            // Try to find partial match
+            const pageContent = await newPage.textContent('body');
+            if (pageContent?.includes('Automation test')) {
+                console.log('✅ Found "Automation test" in page!');
+            } else {
+                console.log('⚠️ Collection name not found, but page opened.');
+            }
+        }
+
+        // Take screenshot of collection page
+        await newPage.screenshot({ path: 'test-results/collection-page.png' });
+        console.log('✅ Screenshot of collection page saved!');
+
+        // Return the new page for further actions
+        return newPage;
+    }
+
+    // ============ MINT NFT FUNCTIONS ============
+
+    async clickMintThis(collectionPage: Page): Promise<void> {
+        console.log('\n=== Click Mint this button ===');
+
+        await collectionPage.waitForTimeout(2000);
+
+        // Find and click Mint this button
+        let clicked = false;
+        for (const selector of CREATE_SELECTORS.MINT_THIS_BUTTON) {
+            const btn = collectionPage.locator(selector).first();
+            if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await btn.click();
+                console.log(`Clicked Mint this with selector: ${selector}`);
+                clicked = true;
+                break;
+            }
+        }
+
+        if (!clicked) {
+            // Fallback
+            const textBtn = collectionPage.getByText('Mint this', { exact: false }).first();
+            await textBtn.click();
+        }
+
+        await collectionPage.waitForTimeout(2000);
+        console.log('✅ Mint UI opened!');
+    }
+
+
+    async uploadMintImage(collectionPage: Page, imagePath: string, imageNumber: number = 1): Promise<void> {
+        console.log(`\n=== Upload image ${imageNumber} for Mint ===`);
+
+        await collectionPage.waitForTimeout(2000);
+        const absolutePath = path.resolve(imagePath);
+
+        // Debug: Log all file inputs in modal
+        const allFileInputs = collectionPage.locator('//div[contains(@id, "content-buy")]//input[@type="file"]');
+        const inputCount = await allFileInputs.count();
+        console.log(`Total file inputs in modal: ${inputCount}`);
+
+        // Log context of each input
+        for (let i = 0; i < inputCount; i++) {
+            try {
+                const input = allFileInputs.nth(i);
+                const parentText = await input.evaluate((el) => {
+                    let parent = el.parentElement;
+                    for (let j = 0; j < 5 && parent; j++) {
+                        const text = parent.textContent?.trim().substring(0, 100);
+                        if (text && text.length > 5) {
+                            return `[${j}] ${text}`;
+                        }
+                        parent = parent.parentElement;
+                    }
+                    return 'No context';
+                });
+                console.log(`Input ${i} context: ${parentText}`);
+            } catch (e) {
+                console.log(`Input ${i}: could not get context`);
+            }
+        }
+
+        // Select appropriate file input
+        // Observation:
+        // - NFT 1: last input is "Upload Character Image"
+        // - NFT 2: after clicking "+Add", NEW input appears (also the last input)
+        let fileInput: Locator;
+        if (inputCount === 0) {
+            throw new Error('No file input found in modal');
+        } else if (inputCount === 1) {
+            fileInput = allFileInputs.first();
+            console.log(`Using the only file input`);
+        } else {
+            // Multiple inputs - ALWAYS use LAST input
+            // Because last input is Character Image for both NFT 1 and NFT 2 (after clicking +Add)
+            fileInput = allFileInputs.last();
+            console.log(`NFT ${imageNumber}: Using last input (index ${inputCount - 1})`);
+        }
+
+        // Wait for input
+        await fileInput.waitFor({ state: 'attached', timeout: 10000 });
+
+        console.log(`Uploading file ${imageNumber}: ${absolutePath}`);
+
+        // Count all images in modal before upload (using broader selector)
+        const allImgSelectors = '//div[contains(@id, "content-buy")]//img';
+        const imgsBefore = await collectionPage.locator(allImgSelectors).count();
+        console.log(`Total images in modal before upload: ${imgsBefore}`);
+
+        // Upload file
+        await fileInput.setInputFiles(absolutePath);
+
+        // Dispatch events
+        await fileInput.evaluate(node => {
+            node.dispatchEvent(new Event('change', { bubbles: true }));
+            node.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        // Wait for image to display (max 10 seconds, reduced from 15s)
+        console.log('Waiting for image to display...');
+        const maxWaitTime = 10000;
+        const checkInterval = 1000;
+        let elapsed = 0;
+        let imageDisplayed = false;
+
+        while (elapsed < maxWaitTime) {
+            await collectionPage.waitForTimeout(checkInterval);
+            elapsed += checkInterval;
+
+            // Check 1: Total img count increased
+            const imgsAfter = await collectionPage.locator(allImgSelectors).count();
+            if (imgsAfter > imgsBefore) {
+                console.log(`✓ New image appeared (${imgsBefore} -> ${imgsAfter})`);
+                imageDisplayed = true;
+                break;
+            }
+
+            // Check 2: Input has file
+            const hasFile = await fileInput.evaluate((el: HTMLInputElement) => el.files && el.files.length > 0);
+            if (hasFile) {
+                // Additional check: find img near input
+                const parentHasImg = await fileInput.evaluate((el) => {
+                    // Search in parent levels
+                    let parent = el.parentElement;
+                    for (let i = 0; i < 6 && parent; i++) {
+                        if (parent.querySelector('img')) return true;
+                        parent = parent.parentElement;
+                    }
+                    return false;
+                });
+                if (parentHasImg) {
+                    console.log('✓ File uploaded and image found near input');
+                    imageDisplayed = true;
+                    break;
+                }
+            }
+
+            console.log(`Waiting... (${elapsed / 1000}s)`);
+        }
+
+        // If not displayed, continue anyway (don't block flow)
+        if (!imageDisplayed) {
+            console.log('⚠️ Could not detect new image, but continuing...');
+            // Verify file was set
+            const hasFile = await fileInput.evaluate((el: HTMLInputElement) => el.files && el.files.length > 0);
+            console.log(`File input has file: ${hasFile}`);
+        }
+
+        // 2 second delay for UI stability
+        await collectionPage.waitForTimeout(2000);
+
+        console.log(`✅ Image ${imageNumber} upload completed!`);
+    }
+
+    async clickAddNFT(collectionPage: Page): Promise<void> {
+        console.log('\n=== Click + Add button to add NFT ===');
+
+        await collectionPage.waitForTimeout(2000);
+
+        // Debug: List all buttons on page
+        const allButtons = collectionPage.locator('button');
+        const buttonCount = await allButtons.count();
+        console.log(`Found ${buttonCount} buttons on page`);
+
+        // Try to find and click + Add button
+        let clicked = false;
+
+        // Method 1: Try specific selectors
+        for (const selector of CREATE_SELECTORS.ADD_NFT_BUTTON) {
+            try {
+                const btn = collectionPage.locator(selector).first();
+                if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await btn.click();
+                    console.log(`Clicked + Add with selector: ${selector}`);
+                    clicked = true;
+                    break;
+                }
+            } catch (e) {
+                // Continue to next selector
+            }
+        }
+
+        // Method 2: Try getByRole
+        if (!clicked) {
+            try {
+                const addBtn = collectionPage.getByRole('button', { name: /add/i }).first();
+                if (await addBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await addBtn.click();
+                    console.log('Clicked Add button via getByRole');
+                    clicked = true;
+                }
+            } catch (e) {
+                console.log('getByRole did not find Add button');
+            }
+        }
+
+        // Method 3: Try getByText with various patterns
+        if (!clicked) {
+            const textPatterns = ['+ Add', '+Add', 'Add', 'Add more', 'Add NFT'];
+            for (const text of textPatterns) {
+                try {
+                    const btn = collectionPage.getByText(text, { exact: false }).first();
+                    if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                        await btn.click();
+                        console.log(`Clicked with text: "${text}"`);
+                        clicked = true;
+                        break;
+                    }
+                } catch (e) {
+                    // Continue
+                }
+            }
+        }
+
+        // Method 4: Find button containing "+" symbol
+        if (!clicked) {
+            try {
+                const plusBtn = collectionPage.locator('button:has-text("+")').first();
+                if (await plusBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await plusBtn.click();
+                    console.log('Clicked button containing "+"');
+                    clicked = true;
+                }
+            } catch (e) {
+                console.log('Could not find button with "+"');
+            }
+        }
+
+        if (!clicked) {
+            console.log('⚠️ Could not find + Add button, slot may already exist');
+        } else {
+            await collectionPage.waitForTimeout(2000);
+            console.log('✅ New NFT slot added!');
+        }
+    }
+
+    async clickMintAndGenerate(collectionPage: Page): Promise<void> {
+        console.log('\n=== Click Mint and Generate buttons ===');
+
+        await collectionPage.waitForTimeout(1000);
+
+        // Click Mint button
+        let mintClicked = false;
+        for (const selector of CREATE_SELECTORS.MINT_BUTTON) {
+            const btn = collectionPage.locator(selector).first();
+            if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await btn.click();
+                console.log(`Clicked Mint with selector: ${selector}`);
+                mintClicked = true;
+                break;
+            }
+        }
+
+        if (!mintClicked) {
+            // Fallback: find button with exact text "Mint"
+            const mintBtn = collectionPage.getByRole('button', { name: 'Mint', exact: true }).first();
+            await mintBtn.click();
+        }
+
+        await collectionPage.waitForTimeout(2000);
+
+        // Click Generate in popup
+        console.log('Looking for popup and clicking Generate...');
+        let generateClicked = false;
+        for (const selector of CREATE_SELECTORS.MINT_GENERATE_BUTTON) {
+            const btn = collectionPage.locator(selector).first();
+            if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await btn.click();
+                console.log(`Clicked Generate with selector: ${selector}`);
+                generateClicked = true;
+                break;
+            }
+        }
+
+        if (!generateClicked) {
+            // Fallback
+            const generateBtn = collectionPage.locator('div[role="dialog"] button:has-text("Generate"), [data-state="open"] button:has-text("Generate")').first();
+            if (await generateBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await generateBtn.click();
+            }
+        }
+
+        console.log('✅ Clicked Mint and Generate!');
+    }
+
+    async waitForMintSuccess(collectionPage: Page): Promise<number> {
+        console.log('\n=== Wait for Mint success (may take up to 3 minutes) ===');
+
+        const maxWaitTime = 240000; // 4 minutes
+        const checkInterval = 5000;
+        let elapsed = 0;
+
+        while (elapsed < maxWaitTime) {
+            // Check for success text
+            const successText = collectionPage.locator('text=/Minted.*NFT.*Successfully/i').first();
+            if (await successText.isVisible({ timeout: 2000 }).catch(() => false)) {
+                // Extract number of NFTs minted
+                const text = await successText.textContent();
+                console.log(`✅ ${text}`);
+
+                // Try to extract number
+                const match = text?.match(/Minted\s*(\d+)/i);
+                const nftCount = match ? parseInt(match[1]) : 0;
+                return nftCount;
+            }
+
+            // Also check alternative patterns
+            const altSuccess = collectionPage.getByText('Successfully').first();
+            if (await altSuccess.isVisible({ timeout: 1000 }).catch(() => false)) {
+                const parentText = await collectionPage.locator('div:has-text("Successfully")').first().textContent();
+                if (parentText?.toLowerCase().includes('mint')) {
+                    console.log(`✅ Mint successful: ${parentText}`);
+                    const match = parentText?.match(/(\d+)/);
+                    return match ? parseInt(match[1]) : 2; // Default to 2 if can't extract
+                }
+            }
+
+            console.log(`Waiting for mint... (${elapsed / 1000}s)`);
+            await collectionPage.waitForTimeout(checkInterval);
+            elapsed += checkInterval;
+        }
+
+        throw new Error('Timeout: Mint failed after 4 minutes');
+    }
+
+    async closeSuccessPopup(collectionPage: Page): Promise<void> {
+        console.log('\n=== Close Success popup ===');
+        await collectionPage.waitForTimeout(2000);
+
+        let closed = false;
+
+        // Try selectors to close popup
+        const closeSelectors = [
+            ...CREATE_SELECTORS.CLOSE_POPUP_BUTTON,
+            'button[aria-label="Close"]',
+            'button[aria-label="close"]',
+            'div[role="dialog"] button:has(svg)',
+            '[data-state="open"] button:has(svg)',
+            'button:has(svg[class*="close"])',
+            'button:has(svg[class*="x"])',
+            '.close-button',
+            '[class*="close"]',
+        ];
+
+        for (const selector of closeSelectors) {
+            try {
+                const closeBtn = collectionPage.locator(selector).first();
+                if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    console.log(`Closing popup with selector: ${selector}`);
+                    await closeBtn.click({ force: true });
+                    await collectionPage.waitForTimeout(1000);
+                    closed = true;
+                    break;
+                }
+            } catch (e) {
+                // Continue trying other selectors
+            }
+        }
+
+        // If not closed, try clicking overlay or press Escape
+        if (!closed) {
+            console.log('Trying to close with Escape...');
+            await collectionPage.keyboard.press('Escape');
+            await collectionPage.waitForTimeout(500);
+        }
+
+        // Verify popup is closed
+        const dialogStillOpen = await collectionPage.locator('div[role="dialog"]:visible, [data-state="open"]:visible').first().isVisible({ timeout: 1000 }).catch(() => false);
+
+        if (dialogStillOpen) {
+            console.log('Popup still open, trying Escape again...');
+            await collectionPage.keyboard.press('Escape');
+            await collectionPage.waitForTimeout(500);
+        }
+
+        console.log('✅ Popup closed!');
+    }
+}

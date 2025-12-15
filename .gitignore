@@ -1,0 +1,15 @@
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.env
+.env.*
+metamask-data/
+*.log
+
+# MetaMask extension (large, can be downloaded)
+extensions/
+
+# Windows reserved files
+nul

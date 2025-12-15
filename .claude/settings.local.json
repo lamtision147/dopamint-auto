@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx playwright install)",
+      "Bash(mkdir:*)",
+      "Bash(npm test)",
+      "Bash(npx playwright test:*)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude mcp add:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_install",
+      "mcp__playwright__browser_fill_form",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_click",
+      "WebSearch",
+      "Bash(node scripts/download-metamask.js:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npx tsx:*)",
+      "Bash(timeout:*)",
+      "Bash(if not exist \"D:\\claudecli\\test-assets\" mkdir \"D:\\claudecli\\test-assets\")",
+      "Bash(cat:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)"
+    ]
+  }
+}
