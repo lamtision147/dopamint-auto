@@ -142,7 +142,18 @@ export class DopamintLoginPage {
             for (const page of context.pages()) {
                 const url = page.url();
                 console.log(`  - Checking: ${url}`);
+                // MetaMask popup URLs contain chrome-extension:// and either notification.html or popup.html
+                if (url.includes('chrome-extension://') &&
+                    (url.includes('notification.html') || url.includes('popup.html') || url.includes('confirm'))) {
+                    console.log(`  ✓ Found MetaMask popup: ${url}`);
+                    return page;
+                }
+            }
+            // Fallback: any chrome-extension page that's not home.html
+            for (const page of context.pages()) {
+                const url = page.url();
                 if (url.includes('chrome-extension://') && !url.includes('home.html')) {
+                    console.log(`  ✓ Found MetaMask page (fallback): ${url}`);
                     return page;
                 }
             }
@@ -151,6 +162,15 @@ export class DopamintLoginPage {
 
         // Helper function to click MetaMask buttons
         const clickMetaMaskButton = async (popup: Page, buttonTexts: string[]): Promise<boolean> => {
+            // Verify this is a MetaMask page
+            const popupUrl = popup.url();
+            if (!popupUrl.includes('chrome-extension://')) {
+                console.log(`⚠️ Not a MetaMask popup! URL: ${popupUrl}`);
+                return false;
+            }
+
+            console.log(`Looking for buttons on: ${popupUrl}`);
+
             for (const text of buttonTexts) {
                 try {
                     // Try button with exact text
@@ -158,26 +178,55 @@ export class DopamintLoginPage {
                     if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
                         const isDisabled = await btn.isDisabled().catch(() => false);
                         if (!isDisabled) {
-                            console.log(`Clicking button: "${text}"`);
+                            console.log(`✓ Clicking MetaMask button: "${text}"`);
                             await btn.click();
                             return true;
+                        } else {
+                            console.log(`  Button "${text}" found but disabled`);
                         }
                     }
                 } catch (e) {
                     // Continue to next button
                 }
             }
+
+            // Debug: list all visible buttons
+            try {
+                const allButtons = await popup.locator('button').all();
+                console.log(`  Found ${allButtons.length} buttons on page:`);
+                for (let i = 0; i < Math.min(allButtons.length, 5); i++) {
+                    const btnText = await allButtons[i].textContent().catch(() => '');
+                    console.log(`    - Button ${i}: "${btnText?.trim()}"`);
+                }
+            } catch (e) {
+                // Ignore
+            }
+
             return false;
         };
 
         // STEP 1: Handle Connect/Approve popup
         console.log('\n=== METAMASK STEP 1: Connect Approval ===');
-        let metamaskPopup = await findMetaMaskPopup();
 
-        if (!metamaskPopup) {
-            // Wait for popup to open
-            console.log('Waiting for popup to open...');
-            metamaskPopup = await context.waitForEvent('page', { timeout: 15000 }).catch(() => null) as Page | null;
+        // Wait for popup with retry
+        let metamaskPopup: Page | null = null;
+        for (let attempt = 1; attempt <= 5; attempt++) {
+            console.log(`Attempt ${attempt}/5: Looking for MetaMask popup...`);
+            metamaskPopup = await findMetaMaskPopup();
+            if (metamaskPopup) break;
+
+            // Wait for new page event
+            if (attempt < 5) {
+                const newPage = await context.waitForEvent('page', { timeout: 5000 }).catch(() => null);
+                if (newPage) {
+                    console.log(`New page opened: ${newPage.url()}`);
+                    if (newPage.url().includes('chrome-extension://')) {
+                        metamaskPopup = newPage;
+                        break;
+                    }
+                }
+                await dappPage.waitForTimeout(1000);
+            }
         }
 
         if (metamaskPopup) {
@@ -191,13 +240,22 @@ export class DopamintLoginPage {
 
             if (clicked) {
                 console.log('✅ Clicked first button, waiting for next step...');
-                await metamaskPopup.waitForTimeout(2000);
 
-                // Check if popup is still open for second confirmation
-                await metamaskPopup.screenshot({ path: 'test-results/metamask-popup-step1b.png' });
-                clicked = await clickMetaMaskButton(metamaskPopup, connectButtons);
-                if (clicked) {
-                    console.log('✅ Clicked second button');
+                try {
+                    await metamaskPopup.waitForTimeout(2000);
+
+                    // Check if popup is still open for second confirmation
+                    if (!metamaskPopup.isClosed()) {
+                        await metamaskPopup.screenshot({ path: 'test-results/metamask-popup-step1b.png' });
+                        clicked = await clickMetaMaskButton(metamaskPopup, connectButtons);
+                        if (clicked) {
+                            console.log('✅ Clicked second button');
+                        }
+                    } else {
+                        console.log('Popup closed after first click (expected)');
+                    }
+                } catch (e) {
+                    console.log('Popup closed after click (expected behavior)');
                 }
             } else {
                 console.log('⚠️ Could not find Connect button');
@@ -205,7 +263,14 @@ export class DopamintLoginPage {
                 console.log('Popup content:', content?.substring(0, 300));
             }
 
-            await metamaskPopup.waitForTimeout(2000);
+            // Wait a bit, but handle if popup is closed
+            try {
+                if (!metamaskPopup.isClosed()) {
+                    await metamaskPopup.waitForTimeout(2000);
+                }
+            } catch (e) {
+                // Popup closed, continue
+            }
         } else {
             console.log('⚠️ No MetaMask popup found for Connect step');
             // Fallback to dappwright
