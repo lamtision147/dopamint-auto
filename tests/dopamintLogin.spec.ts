@@ -70,7 +70,22 @@ test.describe('Login', () => {
     await page.waitForTimeout(5000); // Wait before ending test
   });
 
-  test.afterEach(async ({}, testInfo) => {
+  test.afterEach(async ({ context }, testInfo) => {
+    // Capture screenshot of all pages on failure
+    if (testInfo.status !== 'passed') {
+      const pages = context.pages();
+      for (let i = 0; i < pages.length; i++) {
+        try {
+          await pages[i].screenshot({
+            path: `test-results/failure-page-${i}-${Date.now()}.png`,
+            fullPage: true
+          });
+          console.log(`Captured screenshot of page ${i}`);
+        } catch (e) {
+          console.log(`Could not capture screenshot of page ${i}:`, e);
+        }
+      }
+    }
     await new Promise(resolve => setTimeout(resolve, 3000));
     console.log(`Test "${testInfo.title}" has ended.`);
   });

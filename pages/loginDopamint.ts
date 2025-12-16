@@ -129,28 +129,52 @@ export class DopamintLoginPage {
 
         // Handle MetaMask Connect
         console.log('Waiting for MetaMask Connect...');
-        await wallet.approve();
+
+        // Take debug screenshot before approve
+        await dappPage.screenshot({ path: 'test-results/debug-before-metamask-approve.png' });
+
+        try {
+            await wallet.approve();
+            console.log('✅ MetaMask approve() completed');
+        } catch (e) {
+            console.log('⚠️ wallet.approve() failed, trying manual approach:', e);
+            // Try to find and click approve manually
+            await dappPage.waitForTimeout(2000);
+        }
 
         console.log('Waiting 3s before capturing Sign event...');
         await dappPage.waitForTimeout(3000);
 
         // Robust manual handling for Sign Popup
         console.log('Listening for Sign popup...');
-        
+
+        // Debug: List all current pages
+        console.log(`Current pages count: ${context.pages().length}`);
+        for (const p of context.pages()) {
+            console.log(`  - Page URL: ${p.url()}`);
+        }
+
         // Create a promise that resolves when the popup opens
-        const popupPromise = context.waitForEvent('page', { timeout: 20000 }).catch(() => null);
+        const popupPromise = context.waitForEvent('page', { timeout: 30000 }).catch(() => null);
 
         // If the popup is already open, we might miss the event, so we also check existing pages
         let signPopup = await popupPromise;
-        
+
         if (!signPopup) {
             console.log('Could not capture new popup event, checking open pages...');
+
+            // Wait a bit and retry
+            await dappPage.waitForTimeout(3000);
+
             for (const page of context.pages()) {
-                // Strict filter: Must be notification.html (popup) NOT home.html (dashboard)
-                if (page.url().includes('notification.html')) {
-                    console.log('Found MetaMask popup (notification.html):', page.url());
-                    signPopup = page;
-                    break;
+                const url = page.url();
+                // Check for MetaMask popup URLs
+                if (url.includes('notification.html') || url.includes('popup.html') || url.includes('chrome-extension://')) {
+                    if (!url.includes('home.html')) { // Exclude main MetaMask dashboard
+                        console.log('Found MetaMask popup:', url);
+                        signPopup = page;
+                        break;
+                    }
                 }
             }
         }

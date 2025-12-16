@@ -112,16 +112,31 @@ function sendTelegramPhoto(photoPath, caption) {
     });
 }
 
-// Get all screenshots from test-results folder
+// Get all screenshots from test-results folder (recursive search)
 function getAllScreenshots() {
     const testResultsDir = path.join(__dirname, '..', 'test-results');
     if (!fs.existsSync(testResultsDir)) return [];
 
-    const files = fs.readdirSync(testResultsDir);
-    return files
-        .filter(f => f.endsWith('.png'))
-        .map(f => path.join(testResultsDir, f))
-        .sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime); // Sort by newest
+    const screenshots = [];
+
+    // Recursive function to find all PNG files
+    function findPngFiles(dir) {
+        const items = fs.readdirSync(dir);
+        for (const item of items) {
+            const fullPath = path.join(dir, item);
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+                findPngFiles(fullPath); // Recurse into subdirectories
+            } else if (item.endsWith('.png')) {
+                screenshots.push(fullPath);
+            }
+        }
+    }
+
+    findPngFiles(testResultsDir);
+
+    // Sort by modification time (newest first)
+    return screenshots.sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime);
 }
 
 // Read collection URL from file (saved by test)
