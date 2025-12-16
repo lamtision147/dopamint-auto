@@ -127,26 +127,99 @@ export class DopamintLoginPage {
         console.log('Selecting MetaMask...');
         await metamaskOption.click();
 
-        // Handle MetaMask Connect
-        console.log('Waiting for MetaMask Connect...');
+        // Handle MetaMask Connect - Manual approach for xvfb environment
+        console.log('Waiting for MetaMask Connect popup...');
 
         // Take debug screenshot before approve
         await dappPage.screenshot({ path: 'test-results/debug-before-metamask-approve.png' });
 
-        try {
-            await wallet.approve();
-            console.log('✅ MetaMask approve() completed');
-        } catch (e) {
-            console.log('⚠️ wallet.approve() failed, trying manual approach:', e);
-            // Try to find and click approve manually
-            await dappPage.waitForTimeout(2000);
-        }
-
-        console.log('Waiting 3s before capturing Sign event...');
+        // Wait for MetaMask popup to appear
         await dappPage.waitForTimeout(3000);
 
-        // Robust manual handling for Sign Popup
-        console.log('Listening for Sign popup...');
+        // Helper function to find MetaMask popup
+        const findMetaMaskPopup = async (): Promise<Page | null> => {
+            console.log(`Searching for MetaMask popup... Total pages: ${context.pages().length}`);
+            for (const page of context.pages()) {
+                const url = page.url();
+                console.log(`  - Checking: ${url}`);
+                if (url.includes('chrome-extension://') && !url.includes('home.html')) {
+                    return page;
+                }
+            }
+            return null;
+        };
+
+        // Helper function to click MetaMask buttons
+        const clickMetaMaskButton = async (popup: Page, buttonTexts: string[]): Promise<boolean> => {
+            for (const text of buttonTexts) {
+                try {
+                    // Try button with exact text
+                    const btn = popup.locator(`button:has-text("${text}")`).first();
+                    if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                        const isDisabled = await btn.isDisabled().catch(() => false);
+                        if (!isDisabled) {
+                            console.log(`Clicking button: "${text}"`);
+                            await btn.click();
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    // Continue to next button
+                }
+            }
+            return false;
+        };
+
+        // STEP 1: Handle Connect/Approve popup
+        console.log('\n=== METAMASK STEP 1: Connect Approval ===');
+        let metamaskPopup = await findMetaMaskPopup();
+
+        if (!metamaskPopup) {
+            // Wait for popup to open
+            console.log('Waiting for popup to open...');
+            metamaskPopup = await context.waitForEvent('page', { timeout: 15000 }).catch(() => null) as Page | null;
+        }
+
+        if (metamaskPopup) {
+            await metamaskPopup.waitForLoadState();
+            await metamaskPopup.bringToFront();
+            await metamaskPopup.screenshot({ path: 'test-results/metamask-popup-step1.png' });
+
+            // Try clicking Next/Connect buttons
+            const connectButtons = ['Next', 'Tiếp theo', 'Connect', 'Kết nối', 'Confirm', 'Xác nhận'];
+            let clicked = await clickMetaMaskButton(metamaskPopup, connectButtons);
+
+            if (clicked) {
+                console.log('✅ Clicked first button, waiting for next step...');
+                await metamaskPopup.waitForTimeout(2000);
+
+                // Check if popup is still open for second confirmation
+                await metamaskPopup.screenshot({ path: 'test-results/metamask-popup-step1b.png' });
+                clicked = await clickMetaMaskButton(metamaskPopup, connectButtons);
+                if (clicked) {
+                    console.log('✅ Clicked second button');
+                }
+            } else {
+                console.log('⚠️ Could not find Connect button');
+                const content = await metamaskPopup.textContent('body').catch(() => '');
+                console.log('Popup content:', content?.substring(0, 300));
+            }
+
+            await metamaskPopup.waitForTimeout(2000);
+        } else {
+            console.log('⚠️ No MetaMask popup found for Connect step');
+            // Fallback to dappwright
+            try {
+                await wallet.approve();
+                console.log('✅ wallet.approve() succeeded');
+            } catch (e) {
+                console.log('⚠️ wallet.approve() failed:', e);
+            }
+        }
+
+        // STEP 2: Handle Sign popup
+        console.log('\n=== METAMASK STEP 2: Sign Message ===');
+        await dappPage.waitForTimeout(3000);
 
         // Debug: List all current pages
         console.log(`Current pages count: ${context.pages().length}`);
@@ -154,92 +227,89 @@ export class DopamintLoginPage {
             console.log(`  - Page URL: ${p.url()}`);
         }
 
-        // Create a promise that resolves when the popup opens
-        const popupPromise = context.waitForEvent('page', { timeout: 30000 }).catch(() => null);
-
-        // If the popup is already open, we might miss the event, so we also check existing pages
-        let signPopup = await popupPromise;
+        // Find sign popup (might be the same or a new one)
+        let signPopup = await findMetaMaskPopup();
 
         if (!signPopup) {
-            console.log('Could not capture new popup event, checking open pages...');
-
-            // Wait a bit and retry
-            await dappPage.waitForTimeout(3000);
-
-            for (const page of context.pages()) {
-                const url = page.url();
-                // Check for MetaMask popup URLs
-                if (url.includes('notification.html') || url.includes('popup.html') || url.includes('chrome-extension://')) {
-                    if (!url.includes('home.html')) { // Exclude main MetaMask dashboard
-                        console.log('Found MetaMask popup:', url);
-                        signPopup = page;
-                        break;
-                    }
-                }
-            }
+            // Wait for new popup
+            signPopup = await context.waitForEvent('page', { timeout: 15000 }).catch(() => null) as Page | null;
         }
 
         if (signPopup) {
-            console.log('Captured Sign/Notification popup!');
+            console.log('Found Sign popup!');
             await signPopup.waitForLoadState();
             await signPopup.bringToFront();
-            await signPopup.waitForTimeout(1000); // Wait for UI to stabilize
+            await signPopup.waitForTimeout(1000);
+            await signPopup.screenshot({ path: 'test-results/metamask-popup-step2.png' });
 
-            // FORCE SCROLL DOWN: Use Mouse Wheel only (bypass LavaMoat security)
+            // Scroll down to enable Sign button
             console.log('Scrolling down to enable Sign button...');
             try {
                 // Method 1: Click the down arrow button if it exists
                 const arrowDown = signPopup.locator(DOPAMINT_SELECTORS.METAMASK_SCROLL_BUTTON);
-                if (await arrowDown.isVisible()) {
+                if (await arrowDown.isVisible().catch(() => false)) {
                     await arrowDown.click();
                 }
-                
-                // Method 2: Mouse wheel scroll (Safe from LavaMoat)
-                await signPopup.mouse.move(100, 100);
-                await signPopup.mouse.wheel(0, 2000);
-                
-                // Method 3: Keyboard PageDown (Safe from LavaMoat)
+
+                // Method 2: Mouse wheel scroll
+                await signPopup.mouse.move(200, 300);
+                await signPopup.mouse.wheel(0, 1000);
+
+                // Method 3: Keyboard
                 await signPopup.keyboard.press('PageDown');
-                await signPopup.keyboard.press('PageDown');
+                await signPopup.keyboard.press('End');
             } catch (e) {
-                console.log('Error while scrolling:', e);
+                console.log('Scroll error (non-fatal):', e);
             }
 
             await signPopup.waitForTimeout(1000);
 
-            // Try to find the Sign button with extensive selectors (English & Vietnamese)
-            let clicked = false;
-            for (const selector of DOPAMINT_SELECTORS.METAMASK_SIGN_BUTTONS) {
-                const btn = signPopup.locator(selector).first();
-                if (await btn.isVisible()) {
-                    // Check if disabled
-                    const isDisabled = await btn.isDisabled();
-                    if (isDisabled) {
-                        console.log(`Found button ${selector} but it is DISABLED. Trying to scroll more...`);
-                        await signPopup.mouse.wheel(0, 2000); // Scroll more
-                        await signPopup.waitForTimeout(1000);
-                    }
-                    
-                    if (!await btn.isDisabled()) {
-                        console.log(`Clicking Sign button with selector: ${selector}`);
-                        await btn.click();
-                        clicked = true;
-                        break;
+            // Try to click Sign/Confirm button
+            const signButtons = ['Sign', 'Ký', 'Confirm', 'Xác nhận', 'Approve', 'Chấp nhận'];
+            let clicked = await clickMetaMaskButton(signPopup, signButtons);
+
+            if (!clicked) {
+                // Try the predefined selectors
+                for (const selector of DOPAMINT_SELECTORS.METAMASK_SIGN_BUTTONS) {
+                    try {
+                        const btn = signPopup.locator(selector).first();
+                        if (await btn.isVisible().catch(() => false)) {
+                            if (!await btn.isDisabled().catch(() => true)) {
+                                console.log(`Clicking with selector: ${selector}`);
+                                await btn.click();
+                                clicked = true;
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        // Continue
                     }
                 }
             }
 
             if (!clicked) {
-                console.log('Still cannot click Sign button! Printing content for debug:');
-                const content = await signPopup.textContent('body');
-                console.log('POPUP CONTENT:', content?.substring(0, 500) + '...'); // Log first 500 chars
-                
+                console.log('⚠️ Could not click Sign button!');
                 await signPopup.screenshot({ path: 'test-results/metamask-sign-fail-debug.png' });
+                const content = await signPopup.textContent('body').catch(() => '');
+                console.log('POPUP CONTENT:', content?.substring(0, 500));
+
+                // Last resort: try wallet.sign()
+                try {
+                    await wallet.sign();
+                    console.log('✅ wallet.sign() succeeded');
+                } catch (e) {
+                    console.log('⚠️ wallet.sign() failed:', e);
+                }
+            } else {
+                console.log('✅ Sign button clicked!');
             }
         } else {
-            console.log('WARNING: No Sign popup window found!');
-            // Fallback: Try wallet.sign() as a last resort
-            try { await wallet.sign(); } catch(e) {}
+            console.log('⚠️ No Sign popup found');
+            try {
+                await wallet.sign();
+            } catch (e) {
+                console.log('wallet.sign() fallback failed:', e);
+            }
         }
 
         console.log('✅ MetaMask interaction completed!');
