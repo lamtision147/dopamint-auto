@@ -112,8 +112,8 @@ function sendTelegramPhoto(photoPath, caption) {
     });
 }
 
-// Get all screenshots from test-results folder (recursive search)
-function getAllScreenshots() {
+// Get screenshots based on test status
+function getScreenshots(status) {
     const testResultsDir = path.join(__dirname, '..', 'test-results');
     if (!fs.existsSync(testResultsDir)) return [];
 
@@ -126,7 +126,7 @@ function getAllScreenshots() {
             const fullPath = path.join(dir, item);
             const stat = fs.statSync(fullPath);
             if (stat.isDirectory()) {
-                findPngFiles(fullPath); // Recurse into subdirectories
+                findPngFiles(fullPath);
             } else if (item.endsWith('.png')) {
                 screenshots.push(fullPath);
             }
@@ -136,7 +136,32 @@ function getAllScreenshots() {
     findPngFiles(testResultsDir);
 
     // Sort by modification time (newest first)
-    return screenshots.sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime);
+    const sorted = screenshots.sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime);
+
+    if (status === 'PASSED') {
+        // Only send success/verification screenshots (max 2)
+        const successScreenshots = sorted.filter(f => {
+            const name = path.basename(f).toLowerCase();
+            return name.includes('success') ||
+                   name.includes('connected') ||
+                   name.includes('passed') ||
+                   name.includes('verify') ||
+                   name.includes('mint-success') ||
+                   name.includes('publish-success');
+        });
+        return successScreenshots.slice(0, 2);
+    } else {
+        // Send debug/failure screenshots (max 3)
+        const failScreenshots = sorted.filter(f => {
+            const name = path.basename(f).toLowerCase();
+            return name.includes('fail') ||
+                   name.includes('error') ||
+                   name.includes('debug') ||
+                   name.includes('step');
+        });
+        // If no specific fail screenshots, return the most recent ones
+        return (failScreenshots.length > 0 ? failScreenshots : sorted).slice(0, 3);
+    }
 }
 
 // Read collection URL from file (saved by test)
@@ -265,9 +290,9 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         await sendTelegramMessage(message);
         console.log('✅ Telegram message sent!');
 
-        // Send all screenshots
-        const screenshots = getAllScreenshots();
-        console.log(`Found ${screenshots.length} screenshots`);
+        // Send relevant screenshots based on status
+        const screenshots = getScreenshots(status);
+        console.log(`Found ${screenshots.length} screenshots to send (status: ${status})`);
 
         for (let i = 0; i < screenshots.length; i++) {
             const screenshot = screenshots[i];

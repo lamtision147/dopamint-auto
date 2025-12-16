@@ -71,22 +71,22 @@ test.describe('Login', () => {
   });
 
   test.afterEach(async ({ context }, testInfo) => {
-    // Capture screenshot of all pages on failure
+    // Only capture debug screenshots on FAILURE
     if (testInfo.status !== 'passed') {
+      console.log('Test FAILED - capturing debug screenshots...');
       const pages = context.pages();
       for (let i = 0; i < pages.length; i++) {
         try {
           await pages[i].screenshot({
-            path: `test-results/failure-page-${i}-${Date.now()}.png`,
+            path: `test-results/FAILED-page-${i}.png`,
             fullPage: true
           });
-          console.log(`Captured screenshot of page ${i}`);
+          console.log(`Captured debug screenshot of page ${i}`);
         } catch (e) {
-          console.log(`Could not capture screenshot of page ${i}:`, e);
+          // Page may be closed
         }
       }
     }
-    await new Promise(resolve => setTimeout(resolve, 3000));
     console.log(`Test "${testInfo.title}" has ended.`);
   });
 });

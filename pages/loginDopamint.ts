@@ -130,9 +130,6 @@ export class DopamintLoginPage {
         // Handle MetaMask Connect - Manual approach for xvfb environment
         console.log('Waiting for MetaMask Connect popup...');
 
-        // Take debug screenshot before approve
-        await dappPage.screenshot({ path: 'test-results/debug-before-metamask-approve.png' });
-
         // Wait for MetaMask popup to appear
         await dappPage.waitForTimeout(3000);
 
@@ -232,7 +229,6 @@ export class DopamintLoginPage {
         if (metamaskPopup) {
             await metamaskPopup.waitForLoadState();
             await metamaskPopup.bringToFront();
-            await metamaskPopup.screenshot({ path: 'test-results/metamask-popup-step1.png' });
 
             // Try clicking Next/Connect buttons
             const connectButtons = ['Next', 'Tiếp theo', 'Connect', 'Kết nối', 'Confirm', 'Xác nhận'];
@@ -246,7 +242,6 @@ export class DopamintLoginPage {
 
                     // Check if popup is still open for second confirmation
                     if (!metamaskPopup.isClosed()) {
-                        await metamaskPopup.screenshot({ path: 'test-results/metamask-popup-step1b.png' });
                         clicked = await clickMetaMaskButton(metamaskPopup, connectButtons);
                         if (clicked) {
                             console.log('✅ Clicked second button');
@@ -282,99 +277,43 @@ export class DopamintLoginPage {
             }
         }
 
-        // STEP 2: Handle Sign popup
-        console.log('\n=== METAMASK STEP 2: Sign Message ===');
-        await dappPage.waitForTimeout(3000);
+        // STEP 2: Check if additional Sign popup appears (may not be needed if signature was in STEP 1)
+        console.log('\n=== METAMASK STEP 2: Check for additional Sign popup ===');
+        await dappPage.waitForTimeout(2000);
 
-        // Debug: List all current pages
-        console.log(`Current pages count: ${context.pages().length}`);
-        for (const p of context.pages()) {
-            console.log(`  - Page URL: ${p.url()}`);
-        }
-
-        // Find sign popup (might be the same or a new one)
+        // Check if there's another popup (signature might be separate)
         let signPopup = await findMetaMaskPopup();
 
-        if (!signPopup) {
-            // Wait for new popup
-            signPopup = await context.waitForEvent('page', { timeout: 15000 }).catch(() => null) as Page | null;
-        }
-
         if (signPopup) {
-            console.log('Found Sign popup!');
+            console.log('Found additional Sign popup!');
             await signPopup.waitForLoadState();
             await signPopup.bringToFront();
             await signPopup.waitForTimeout(1000);
-            await signPopup.screenshot({ path: 'test-results/metamask-popup-step2.png' });
 
             // Scroll down to enable Sign button
-            console.log('Scrolling down to enable Sign button...');
+            console.log('Scrolling down...');
             try {
-                // Method 1: Click the down arrow button if it exists
-                const arrowDown = signPopup.locator(DOPAMINT_SELECTORS.METAMASK_SCROLL_BUTTON);
-                if (await arrowDown.isVisible().catch(() => false)) {
-                    await arrowDown.click();
-                }
-
-                // Method 2: Mouse wheel scroll
                 await signPopup.mouse.move(200, 300);
                 await signPopup.mouse.wheel(0, 1000);
-
-                // Method 3: Keyboard
-                await signPopup.keyboard.press('PageDown');
                 await signPopup.keyboard.press('End');
             } catch (e) {
-                console.log('Scroll error (non-fatal):', e);
+                // Ignore scroll errors
             }
 
-            await signPopup.waitForTimeout(1000);
+            await signPopup.waitForTimeout(500);
 
             // Try to click Sign/Confirm button
             const signButtons = ['Sign', 'Ký', 'Confirm', 'Xác nhận', 'Approve', 'Chấp nhận'];
-            let clicked = await clickMetaMaskButton(signPopup, signButtons);
+            const clicked = await clickMetaMaskButton(signPopup, signButtons);
 
-            if (!clicked) {
-                // Try the predefined selectors
-                for (const selector of DOPAMINT_SELECTORS.METAMASK_SIGN_BUTTONS) {
-                    try {
-                        const btn = signPopup.locator(selector).first();
-                        if (await btn.isVisible().catch(() => false)) {
-                            if (!await btn.isDisabled().catch(() => true)) {
-                                console.log(`Clicking with selector: ${selector}`);
-                                await btn.click();
-                                clicked = true;
-                                break;
-                            }
-                        }
-                    } catch (e) {
-                        // Continue
-                    }
-                }
-            }
-
-            if (!clicked) {
-                console.log('⚠️ Could not click Sign button!');
-                await signPopup.screenshot({ path: 'test-results/metamask-sign-fail-debug.png' });
-                const content = await signPopup.textContent('body').catch(() => '');
-                console.log('POPUP CONTENT:', content?.substring(0, 500));
-
-                // Last resort: try wallet.sign()
-                try {
-                    await wallet.sign();
-                    console.log('✅ wallet.sign() succeeded');
-                } catch (e) {
-                    console.log('⚠️ wallet.sign() failed:', e);
-                }
+            if (clicked) {
+                console.log('✅ Additional Sign button clicked!');
             } else {
-                console.log('✅ Sign button clicked!');
+                console.log('No Sign button found (may already be signed)');
             }
         } else {
-            console.log('⚠️ No Sign popup found');
-            try {
-                await wallet.sign();
-            } catch (e) {
-                console.log('wallet.sign() fallback failed:', e);
-            }
+            // No additional popup - signature was likely done in STEP 1 (this is normal!)
+            console.log('✅ No additional Sign popup (signature completed in Connect step)');
         }
 
         console.log('✅ MetaMask interaction completed!');
