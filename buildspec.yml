@@ -1,0 +1,49 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    TELEGRAM_BOT_TOKEN: "dopamint-secrets:TELEGRAM_BOT_TOKEN"
+    TELEGRAM_CHAT_ID: "dopamint-secrets:TELEGRAM_CHAT_ID"
+  variables:
+    TEST_FILE: "dopamintLogin.spec.ts,create.spec.ts"
+    TEST_NAME: "Dopamint Auto Test"
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo "Installing dependencies..."
+      - npm ci
+      - npx playwright install chromium --with-deps
+
+  pre_build:
+    commands:
+      - echo "Preparing test environment..."
+      - mkdir -p test-results
+      - |
+        cat > .env.telegram << EOF
+        TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+        TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+        EOF
+
+  build:
+    commands:
+      - echo "Running Playwright tests..."
+      - chmod +x scripts/run-test.sh
+      - ./scripts/run-test.sh
+
+  post_build:
+    commands:
+      - echo "Tests completed!"
+
+artifacts:
+  files:
+    - test-results/**/*
+    - playwright-report/**/*
+  name: test-results-$(date +%Y%m%d-%H%M%S)
+
+cache:
+  paths:
+    - node_modules/**/*
+    - ~/.cache/ms-playwright/**/*

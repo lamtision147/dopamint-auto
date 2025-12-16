@@ -3,6 +3,7 @@ setlocal enabledelayedexpansion
 
 :: ========================================
 :: Dopamint Playwright Auto Test Runner
+:: Supports: single file, multiple files (comma-separated), or "all"
 :: ========================================
 
 :: Set working directory
@@ -30,15 +31,67 @@ echo   Config: %TEST_FILE%
 echo   Name: %TEST_NAME%
 echo ========================================
 
-:: Get current date/time for log file
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
-set LOGFILE=test-results\test-log-%datetime:~0,8%-%datetime:~8,6%.txt
+:: Track overall exit code
+set OVERALL_EXIT_CODE=0
+
+:: Check if running all tests
+if /i "%TEST_FILE%"=="all" (
+    echo.
+    echo Running ALL tests...
+    call :RunSingleTest "all" "All Tests"
+    goto :EndScript
+)
+
+:: Check if multiple files (contains comma)
+echo %TEST_FILE% | findstr /C:"," >nul
+if %errorlevel%==0 (
+    echo.
+    echo Multiple files detected, running each separately...
+
+    :: Parse comma-separated files
+    set FILE_INDEX=0
+    for %%F in (%TEST_FILE%) do (
+        set /a FILE_INDEX+=1
+        set "CURRENT_FILE=%%F"
+        :: Remove any spaces
+        set "CURRENT_FILE=!CURRENT_FILE: =!"
+        echo.
+        echo ----------------------------------------
+        echo   [!FILE_INDEX!] Running: !CURRENT_FILE!
+        echo ----------------------------------------
+        call :RunSingleTest "!CURRENT_FILE!" "!CURRENT_FILE!"
+    )
+    goto :EndScript
+)
+
+:: Single file mode
+echo.
+echo Running single test: %TEST_FILE%
+call :RunSingleTest "%TEST_FILE%" "%TEST_NAME%"
+goto :EndScript
+
+:: ========================================
+:: Function: Run a single test file
+:: ========================================
+:RunSingleTest
+set "SINGLE_FILE=%~1"
+set "SINGLE_NAME=%~2"
+
+:: Get current date/time for log file (instant - no external commands)
+set "HH=%time:~0,2%"
+set "MM=%time:~3,2%"
+set "SS=%time:~6,2%"
+if "%HH:~0,1%"==" " set "HH=0%HH:~1,1%"
+set "datetime=%date:~-4%%date:~-7,2%%date:~-10,2%-%HH%%MM%%SS%"
+set "datetime=%datetime:/=%"
+set "datetime=%datetime:-=%"
+set LOGFILE=test-results\test-log-%SINGLE_FILE%-%RANDOM%.txt
 
 :: Log start
-echo ======================================== >> %LOGFILE%
-echo Test started at %date% %time% >> %LOGFILE%
-echo Test file: %TEST_FILE% >> %LOGFILE%
-echo ======================================== >> %LOGFILE%
+echo ======================================== >> !LOGFILE!
+echo Test started at %date% %time% >> !LOGFILE!
+echo Test file: %SINGLE_FILE% >> !LOGFILE!
+echo ======================================== >> !LOGFILE!
 
 :: Record start time in seconds
 for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
@@ -46,25 +99,18 @@ for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
     set /a START_M=1%%b-100
     set /a START_S=1%%c-100
 )
-set /a START_TOTAL=%START_H%*3600+%START_M%*60+%START_S%
+set /a START_TOTAL=!START_H!*3600+!START_M!*60+!START_S!
 
-echo.
-echo ========================================
-echo   DOPAMINT AUTO TEST - Starting...
-echo ========================================
-echo.
+echo Running Playwright test: %SINGLE_FILE%...
+echo Running tests... >> !LOGFILE!
 
-:: Run Playwright test
-echo Running Playwright tests...
-echo Running tests... >> %LOGFILE%
-
-if /i "%TEST_FILE%"=="all" (
-    echo Running all tests...
-    call npx playwright test tests/ --reporter=list 2>&1 >> %LOGFILE%
+:: Use direct call instead of npx for faster startup
+if /i "%SINGLE_FILE%"=="all" (
+    call node_modules\.bin\playwright.cmd test tests/ --reporter=list 2>&1 >> !LOGFILE!
 ) else (
-    call npx playwright test tests/%TEST_FILE% --reporter=list 2>&1 >> %LOGFILE%
+    call node_modules\.bin\playwright.cmd test tests/%SINGLE_FILE% --reporter=list 2>&1 >> !LOGFILE!
 )
-set TEST_EXIT_CODE=%errorlevel%
+set TEST_EXIT_CODE=!errorlevel!
 
 :: Record end time and calculate duration
 for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
@@ -72,47 +118,47 @@ for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
     set /a END_M=1%%b-100
     set /a END_S=1%%c-100
 )
-set /a END_TOTAL=%END_H%*3600+%END_M%*60+%END_S%
+set /a END_TOTAL=!END_H!*3600+!END_M!*60+!END_S!
 
 :: Calculate duration in seconds
-set /a DURATION=%END_TOTAL%-%START_TOTAL%
-if %DURATION% lss 0 set /a DURATION=%DURATION%+86400
+set /a DURATION=!END_TOTAL!-!START_TOTAL!
+if !DURATION! lss 0 set /a DURATION=!DURATION!+86400
 
-echo Start: %time% >> %LOGFILE%
-echo Duration: %DURATION% seconds >> %LOGFILE%
+echo Duration: !DURATION! seconds >> !LOGFILE!
 
 :: Determine status
-if %TEST_EXIT_CODE%==0 (
+if !TEST_EXIT_CODE!==0 (
     set STATUS=PASSED
-    echo.
-    echo ✅ TEST PASSED!
+    echo [PASSED] %SINGLE_FILE%
 ) else (
     set STATUS=FAILED
-    echo.
-    echo ❌ TEST FAILED!
+    set OVERALL_EXIT_CODE=1
+    echo [FAILED] %SINGLE_FILE%
 )
 
-echo Test finished with status: %STATUS% >> %LOGFILE%
-echo Exit code: %TEST_EXIT_CODE% >> %LOGFILE%
+echo Test finished with status: !STATUS! >> !LOGFILE!
+echo Exit code: !TEST_EXIT_CODE! >> !LOGFILE!
 
-:: Find latest screenshot
-set SCREENSHOT=
-if exist "test-results\dopamint-metamask-connected.png" (
-    set SCREENSHOT=test-results\dopamint-metamask-connected.png
-)
+:: Send Telegram notification for this test
+echo Sending Telegram notification for %SINGLE_FILE%...
+node scripts/send-telegram.js !STATUS! !DURATION! "%SINGLE_NAME%" "%SINGLE_FILE%" "!LOGFILE!"
 
-:: Send Telegram notification
-echo.
-echo Sending Telegram notification...
-node scripts/send-telegram.js %STATUS% %DURATION% "%TEST_NAME%" "%TEST_FILE%"
+:: Small delay between notifications to avoid rate limiting
+timeout /t 2 /nobreak >nul
 
+goto :eof
+
+:: ========================================
+:: End Script
+:: ========================================
+:EndScript
 echo.
 echo ========================================
-echo   Test Complete! Check Telegram.
+echo   All Tests Complete! Check Telegram.
 echo ========================================
 echo.
 
 :: Keep window open for 5 seconds
 timeout /t 5
 
-exit /b %TEST_EXIT_CODE%
+exit /b %OVERALL_EXIT_CODE%

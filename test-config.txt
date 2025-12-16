@@ -4,10 +4,11 @@
 
 # Test file to run (relative to tests/ folder)
 # Options:
-#   - dopamintLogin.spec.ts  (Login test only)
-#   - create.spec.ts         (Full create NFT flow)
-#   - all                    (Run all tests)
-TEST_FILE=create.spec.ts
+#   - dopamintLogin.spec.ts                        (Single file - 1 notification)
+#   - create.spec.ts                               (Single file - 1 notification)
+#   - dopamintLogin.spec.ts,create.spec.ts         (Multiple files - separate notifications)
+#   - all                                          (Run all tests - 1 notification)
+TEST_FILE=dopamintLogin.spec.ts,create.spec.ts
 
-# Test name for Telegram notification
+# Test name for Telegram notification (used for single file mode only)
 TEST_NAME=login and Create and Mint

@@ -133,6 +133,58 @@ function getCollectionUrl() {
     return null;
 }
 
+// Extract error details from log file
+function getErrorDetails(logFilePath) {
+    if (!logFilePath || !fs.existsSync(logFilePath)) {
+        return null;
+    }
+
+    try {
+        const content = fs.readFileSync(logFilePath, 'utf8');
+        const lines = content.split('\n');
+
+        // Look for error patterns in the log
+        const errorPatterns = [
+            /Error:(.+)/i,
+            /TimeoutError:(.+)/i,
+            /expect\((.+)\)\.(.+)/i,
+            /Locator:(.+)/i,
+            /waiting for(.+)/i,
+            /failed(.+)/i
+        ];
+
+        const errorLines = [];
+        let capturing = false;
+
+        for (const line of lines) {
+            // Start capturing when we see error indicators
+            if (line.includes('Error:') || line.includes('TimeoutError') ||
+                line.includes('expect(') || line.includes('Locator:') ||
+                line.includes('Call log:') || line.includes('waiting for')) {
+                capturing = true;
+            }
+
+            if (capturing) {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('at ') && !trimmed.startsWith('========')) {
+                    errorLines.push(trimmed);
+                }
+                // Stop after capturing enough context
+                if (errorLines.length >= 10) break;
+            }
+        }
+
+        if (errorLines.length > 0) {
+            return errorLines.join('\n').substring(0, 500); // Limit to 500 chars
+        }
+
+        return null;
+    } catch (err) {
+        console.error('Error reading log file:', err.message);
+        return null;
+    }
+}
+
 // Format duration from seconds to human readable
 function formatDuration(seconds) {
     const mins = Math.floor(seconds / 60);
@@ -150,6 +202,7 @@ async function main() {
     const duration = args[1] || '0';
     const testName = args[2] || 'Dopamint Test';
     const testFile = args[3] || '';
+    const logFile = args[4] || '';
 
     const timestamp = new Date().toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
@@ -177,6 +230,14 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
 📊 Status: <b>${statusText}</b>
 ⏱ Duration: ${formattedDuration}
 `.trim();
+
+    // Add error details if test failed
+    if (status === 'FAILED' && logFile) {
+        const errorDetails = getErrorDetails(logFile);
+        if (errorDetails) {
+            message += `\n\n⚠️ <b>Error Details:</b>\n<pre>${errorDetails}</pre>`;
+        }
+    }
 
     // Add URL if exists
     if (collectionUrl) {
