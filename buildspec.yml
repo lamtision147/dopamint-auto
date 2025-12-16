@@ -16,6 +16,8 @@ phases:
       - echo "Installing dependencies..."
       - npm ci
       - npx playwright install chromium --with-deps
+      # Install xvfb for virtual display (needed for headed browser with extensions)
+      - apt-get update && apt-get install -y xvfb dbus-x11
 
   pre_build:
     commands:
@@ -26,12 +28,16 @@ phases:
         TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
         TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
         EOF
+      # Start D-Bus (required for Chrome)
+      - mkdir -p /run/dbus
+      - dbus-daemon --system --fork || true
 
   build:
     commands:
-      - echo "Running Playwright tests..."
+      - echo "Running Playwright tests with virtual display..."
       - chmod +x scripts/run-test.sh
-      - ./scripts/run-test.sh
+      # Use xvfb-run to create virtual display for headed browser
+      - xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" ./scripts/run-test.sh
 
   post_build:
     commands:
