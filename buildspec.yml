@@ -4,6 +4,9 @@ env:
   secrets-manager:
     TELEGRAM_BOT_TOKEN: "dopamint-secrets:TELEGRAM_BOT_TOKEN"
     TELEGRAM_CHAT_ID: "dopamint-secrets:TELEGRAM_CHAT_ID"
+    DOPAMINT_EMAIL: "dopamint-secrets:DOPAMINT_EMAIL"
+    DOPAMINT_PASSWORD: "dopamint-secrets:DOPAMINT_PASSWORD"
+    METAMASK_SEED_PHRASE: "dopamint-secrets:METAMASK_SEED_PHRASE"
   variables:
     TEST_FILE: "dopamintLogin.spec.ts,create.spec.ts"
     TEST_NAME: "Dopamint Auto Test"
@@ -23,10 +26,18 @@ phases:
     commands:
       - echo "Preparing test environment..."
       - mkdir -p test-results
+      # Create .env.telegram for Telegram notifications
       - |
         cat > .env.telegram << EOF
         TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
         TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+        EOF
+      # Create .env.test for test credentials
+      - |
+        cat > .env.test << EOF
+        DOPAMINT_EMAIL=${DOPAMINT_EMAIL}
+        DOPAMINT_PASSWORD=${DOPAMINT_PASSWORD}
+        METAMASK_SEED_PHRASE=${METAMASK_SEED_PHRASE}
         EOF
       # Start D-Bus (required for Chrome)
       - mkdir -p /run/dbus
