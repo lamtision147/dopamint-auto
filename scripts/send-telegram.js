@@ -139,7 +139,7 @@ function getScreenshots(status) {
     const sorted = screenshots.sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime);
 
     if (status === 'PASSED') {
-        // Only send success/verification screenshots (max 2)
+        // Only send success/verification screenshots (max 3)
         const successScreenshots = sorted.filter(f => {
             const name = path.basename(f).toLowerCase();
             return name.includes('success') ||
@@ -147,9 +147,11 @@ function getScreenshots(status) {
                    name.includes('passed') ||
                    name.includes('verify') ||
                    name.includes('mint-success') ||
-                   name.includes('publish-success');
+                   name.includes('publish-success') ||
+                   name.includes('sell-success') ||
+                   name.includes('search-result');
         });
-        return successScreenshots.slice(0, 2);
+        return successScreenshots.slice(0, 3);
     } else {
         // Send debug/failure screenshots (max 3)
         const failScreenshots = sorted.filter(f => {
@@ -169,6 +171,20 @@ function getCollectionUrl() {
     const urlFile = path.join(__dirname, '..', 'test-results', 'collection-url.txt');
     if (fs.existsSync(urlFile)) {
         return fs.readFileSync(urlFile, 'utf8').trim();
+    }
+    return null;
+}
+
+// Read token URLs from file (saved by searchMintSell test)
+function getTokenUrls() {
+    const tokenFile = path.join(__dirname, '..', 'test-results', 'token-urls.json');
+    if (fs.existsSync(tokenFile)) {
+        try {
+            const content = fs.readFileSync(tokenFile, 'utf8');
+            return JSON.parse(content);
+        } catch (e) {
+            console.error('Error reading token-urls.json:', e.message);
+        }
     }
     return null;
 }
@@ -261,6 +277,9 @@ async function main() {
     // Get collection URL if exists
     const collectionUrl = getCollectionUrl();
 
+    // Get token URLs if exists (for searchMintSell test)
+    const tokenUrls = getTokenUrls();
+
     let message = `
 ${emoji} <b>DOPAMINT AUTO TEST</b>
 
@@ -282,6 +301,23 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
     // Add URL if exists
     if (collectionUrl) {
         message += `\n\n🔗 Collection: ${collectionUrl}`;
+    }
+
+    // Add minted/sold token URLs for searchMintSell test
+    if (tokenUrls && testFile.includes('searchMintSell')) {
+        message += `\n\n🎨 <b>Collection:</b> ${tokenUrls.collectionName || 'N/A'}`;
+        message += `\n🔢 <b>Minted:</b> ${tokenUrls.mintCount || 0} NFTs`;
+
+        if (tokenUrls.mintedUrls && tokenUrls.mintedUrls.length > 0) {
+            message += `\n\n🖼 <b>Minted NFT URLs:</b>`;
+            tokenUrls.mintedUrls.forEach((url, index) => {
+                message += `\n${index + 1}. ${url}`;
+            });
+        }
+
+        if (tokenUrls.soldUrl) {
+            message += `\n\n💰 <b>Sold NFT URL:</b>\n${tokenUrls.soldUrl}`;
+        }
     }
 
     message += `\n\n🤖 Automated by Playwright`;

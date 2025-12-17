@@ -8,7 +8,7 @@ env:
     DOPAMINT_PASSWORD: "dopamint-secrets:DOPAMINT_PASSWORD"
     METAMASK_SEED_PHRASE: "dopamint-secrets:METAMASK_SEED_PHRASE"
   variables:
-    TEST_FILE: "dopamintLogin.spec.ts,create.spec.ts"
+    TEST_FILE: "dopamintLogin.spec.ts,create.spec.ts,searchMintSell.spec.ts"
     TEST_NAME: "Dopamint Auto Test"
 
 phases:

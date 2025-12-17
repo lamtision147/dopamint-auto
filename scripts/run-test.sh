@@ -20,6 +20,10 @@ echo "========================================"
 # Create test-results folder if not exists
 mkdir -p test-results
 
+# Clean up previous test artifacts
+rm -f test-results/token-urls.json
+rm -f test-results/collection-url.txt
+
 # Track overall exit code
 OVERALL_EXIT_CODE=0
 
