@@ -2,10 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: true,
+  fullyParallel: true, // Enable parallel execution - each worker has isolated session
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1, // Always use 1 worker for MetaMask tests
+  workers: process.env.CI ? 3 : 1, // 3 workers on CI (CodeBuild), 1 locally
   reporter: [['list'], ['html', { open: 'never' }]],
   timeout: 180000, // 3 minutes global timeout
   use: {

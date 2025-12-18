@@ -189,6 +189,20 @@ function getTokenUrls() {
     return null;
 }
 
+// Read create info from file (saved by create test)
+function getCreateInfo() {
+    const createFile = path.join(__dirname, '..', 'test-results', 'create-info.json');
+    if (fs.existsSync(createFile)) {
+        try {
+            const content = fs.readFileSync(createFile, 'utf8');
+            return JSON.parse(content);
+        } catch (e) {
+            console.error('Error reading create-info.json:', e.message);
+        }
+    }
+    return null;
+}
+
 // Extract error details from log file
 function getErrorDetails(logFilePath) {
     if (!logFilePath || !fs.existsSync(logFilePath)) {
@@ -280,6 +294,9 @@ async function main() {
     // Get token URLs if exists (for searchMintSell test)
     const tokenUrls = getTokenUrls();
 
+    // Get create info if exists (for create test)
+    const createInfo = getCreateInfo();
+
     let message = `
 ${emoji} <b>DOPAMINT AUTO TEST</b>
 
@@ -296,6 +313,13 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         if (errorDetails) {
             message += `\n\n⚠️ <b>Error Details:</b>\n<pre>${errorDetails}</pre>`;
         }
+    }
+
+    // Add create info (model, collection, minted count) for create test
+    if (createInfo && testFile.includes('create')) {
+        message += `\n\n🤖 <b>Model:</b> ${createInfo.model || 'N/A'}`;
+        message += `\n📦 <b>Collection:</b> ${createInfo.collectionName || 'N/A'}`;
+        message += `\n🎨 <b>Minted:</b> ${createInfo.mintedCount || 0} NFTs`;
     }
 
     // Add URL if exists

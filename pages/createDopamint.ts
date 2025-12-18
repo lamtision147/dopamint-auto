@@ -3,15 +3,26 @@ import { Dappwright } from "@tenkeylabs/dappwright";
 import { CREATE_SELECTORS } from '../xpath/dopamintCreate';
 import path from 'path';
 
+// Model type definition
+export type AIModel = 'Nano Banana Pro' | 'Nano Banana' | 'ChatGPT';
+
 export class DopamintCreatePage {
     readonly context: BrowserContext;
     readonly wallet: Dappwright;
     page: Page;
 
+    // Store selected model for telegram notification
+    private selectedModel: AIModel = 'Nano Banana Pro';
+
     constructor(context: BrowserContext, wallet: Dappwright, page: Page) {
         this.context = context;
         this.wallet = wallet;
         this.page = page;
+    }
+
+    // Getter for selected model
+    getSelectedModel(): AIModel {
+        return this.selectedModel;
     }
 
     // Helper function to find element from array of selectors
@@ -111,12 +122,8 @@ export class DopamintCreatePage {
         }
     }
 
-    async selectNanoBananaPro(): Promise<void> {
-        console.log('\n=== Select Nano Banana Pro model ===');
-
-        await this.page.waitForTimeout(2000);
-
-        // Click on Select model dropdown
+    // Helper function to open model dropdown
+    private async openModelDropdown(): Promise<void> {
         const modelSelect = await this.findElementFromSelectors(
             CREATE_SELECTORS.MODEL_SELECT,
             10000
@@ -133,6 +140,15 @@ export class DopamintCreatePage {
                 await this.page.waitForTimeout(1000);
             }
         }
+    }
+
+    async selectNanoBananaPro(): Promise<void> {
+        console.log('\n=== Select Nano Banana Pro model ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Open dropdown
+        await this.openModelDropdown();
 
         // Select Nano Banana Pro option
         await this.page.waitForTimeout(1000);
@@ -144,6 +160,7 @@ export class DopamintCreatePage {
         if (nanoBananaOption) {
             await nanoBananaOption.click();
             await this.page.waitForTimeout(1000);
+            this.selectedModel = 'Nano Banana Pro';
             console.log('✅ Selected Nano Banana Pro model!');
         } else {
             // Fallback
@@ -151,10 +168,105 @@ export class DopamintCreatePage {
             if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await optionText.click();
                 await this.page.waitForTimeout(1000);
+                this.selectedModel = 'Nano Banana Pro';
                 console.log('✅ Clicked by text "Nano Banana Pro"!');
             } else {
                 throw new Error('Nano Banana Pro option not found');
             }
+        }
+    }
+
+    async selectNanoBanana(): Promise<void> {
+        console.log('\n=== Select Nano Banana model ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Open dropdown
+        await this.openModelDropdown();
+
+        // Select Nano Banana option
+        await this.page.waitForTimeout(1000);
+        const nanoBananaOption = await this.findElementFromSelectors(
+            CREATE_SELECTORS.NANO_BANANA_OPTION,
+            5000
+        );
+
+        if (nanoBananaOption) {
+            await nanoBananaOption.click();
+            await this.page.waitForTimeout(1000);
+            this.selectedModel = 'Nano Banana';
+            console.log('✅ Selected Nano Banana model!');
+        } else {
+            // Fallback - click text but make sure it's not "Pro" version
+            const optionText = this.page.locator('[role="option"]:has-text("Nano Banana"):not(:has-text("Pro"))').first();
+            if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await optionText.click();
+                await this.page.waitForTimeout(1000);
+                this.selectedModel = 'Nano Banana';
+                console.log('✅ Clicked Nano Banana option!');
+            } else {
+                // Try exact match
+                const exactOption = this.page.getByText('Nano Banana', { exact: true }).first();
+                if (await exactOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+                    await exactOption.click();
+                    await this.page.waitForTimeout(1000);
+                    this.selectedModel = 'Nano Banana';
+                    console.log('✅ Selected Nano Banana (exact match)!');
+                } else {
+                    throw new Error('Nano Banana option not found');
+                }
+            }
+        }
+    }
+
+    async selectChatGPT(): Promise<void> {
+        console.log('\n=== Select ChatGPT model ===');
+
+        await this.page.waitForTimeout(2000);
+
+        // Open dropdown
+        await this.openModelDropdown();
+
+        // Select ChatGPT option
+        await this.page.waitForTimeout(1000);
+        const chatgptOption = await this.findElementFromSelectors(
+            CREATE_SELECTORS.CHATGPT_OPTION,
+            5000
+        );
+
+        if (chatgptOption) {
+            await chatgptOption.click();
+            await this.page.waitForTimeout(1000);
+            this.selectedModel = 'ChatGPT';
+            console.log('✅ Selected ChatGPT model!');
+        } else {
+            // Fallback
+            const optionText = this.page.getByText('ChatGPT', { exact: false }).first();
+            if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await optionText.click();
+                await this.page.waitForTimeout(1000);
+                this.selectedModel = 'ChatGPT';
+                console.log('✅ Clicked by text "ChatGPT"!');
+            } else {
+                throw new Error('ChatGPT option not found');
+            }
+        }
+    }
+
+    // Generic method to select any model
+    async selectModel(model: AIModel): Promise<void> {
+        switch (model) {
+            case 'Nano Banana Pro':
+                await this.selectNanoBananaPro();
+                break;
+            case 'Nano Banana':
+                await this.selectNanoBanana();
+                break;
+            case 'ChatGPT':
+                await this.selectChatGPT();
+                break;
+            default:
+                throw new Error(`Unknown model: ${model}`);
         }
     }
 

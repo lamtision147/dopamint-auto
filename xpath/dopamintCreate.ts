@@ -50,6 +50,22 @@ export const CREATE_SELECTORS = {
         'text=Nano Banana Pro',
     ],
 
+    // Nano Banana option in dropdown
+    NANO_BANANA_OPTION: [
+        '[role="option"]:has-text("Nano Banana"):not(:has-text("Pro"))',
+        'li:has-text("Nano Banana"):not(:has-text("Pro"))',
+        'div[role="listbox"] >> text=Nano Banana',
+        'text=Nano Banana',
+    ],
+
+    // ChatGPT option in dropdown
+    CHATGPT_OPTION: [
+        '[role="option"]:has-text("ChatGPT")',
+        'li:has-text("ChatGPT")',
+        'div[role="listbox"] >> text=ChatGPT',
+        'text=ChatGPT',
+    ],
+
     // Image Upload
     UPLOAD_IMAGE_AREA: 'input[type="file"], button:has-text("Upload"), div:has-text("Upload image")',
     UPLOAD_INPUT: 'input[type="file"]',
