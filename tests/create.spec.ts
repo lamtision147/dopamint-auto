@@ -182,8 +182,8 @@ async function runCreateFlowWithModel(
 
 test.describe('Create NFT Flow', () => {
     // Increase timeout to 10 minutes because image generation can take 3-4 minutes
-    // Each test runs in isolated session, so parallel is OK
-    test.describe.configure({ timeout: 600000 });
+    // Tests run serially within this file (3 models: Nano Banana Pro, Nano Banana, ChatGPT)
+    test.describe.configure({ timeout: 600000, mode: 'serial' });
 
     test("Case 1: Create NFT with Nano Banana Pro model", async ({ wallet, page, context }) => {
         await runCreateFlowWithModel('Nano Banana Pro', wallet, page, context);

@@ -2,10 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: true, // Enable parallel execution - each worker has isolated session
+  fullyParallel: false, // Tests within each file run serially
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 3 : 1, // 3 workers on CI (CodeBuild), 1 locally
+  workers: 1, // 1 worker per spec file (parallelization handled by run-test.sh)
   reporter: [['list'], ['html', { open: 'never' }]],
   timeout: 180000, // 3 minutes global timeout
   use: {

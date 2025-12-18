@@ -3,10 +3,13 @@
 # ========================================
 # Dopamint Playwright Auto Test Runner
 # For AWS CodeBuild / Linux environments
-# Supports parallel execution of spec files
+# - Multiple spec files run in PARALLEL
+# - Each spec file sends its own Telegram notification
+# - Test cases within each file run SERIALLY
 # ========================================
 
-set -e
+# Don't exit on error - we want to continue and send notifications
+set +e
 
 # Default values (can be overridden by environment variables)
 TEST_FILE="${TEST_FILE:-dopamintLogin.spec.ts}"
@@ -29,40 +32,39 @@ rm -f test-results/create-info.json
 # Track overall exit code
 OVERALL_EXIT_CODE=0
 
-# Generate timestamp and log file
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-LOGFILE="test-results/test-log-${TIMESTAMP}.txt"
+# Array to store background PIDs
+declare -a PIDS
 
-# Function to run tests and send notification
-run_tests() {
-    local TEST_PATTERN="$1"
-    local TEST_DISPLAY_NAME="$2"
+# Function to run a single spec file and send notification
+run_single_spec() {
+    local SPEC_FILE="$1"
+    local TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    local LOGFILE="test-results/test-log-${SPEC_FILE}-${TIMESTAMP}.txt"
 
     echo ""
     echo "========================================"
-    echo "  Running: $TEST_DISPLAY_NAME"
-    echo "  Pattern: $TEST_PATTERN"
+    echo "  Starting: $SPEC_FILE"
     echo "========================================"
 
     # Log start
     echo "========================================" >> "$LOGFILE"
     echo "Test started at $(date)" >> "$LOGFILE"
-    echo "Test pattern: $TEST_PATTERN" >> "$LOGFILE"
+    echo "Test file: $SPEC_FILE" >> "$LOGFILE"
     echo "========================================" >> "$LOGFILE"
 
     # Record start time
-    START_TIME=$(date +%s)
+    local START_TIME=$(date +%s)
 
-    echo "Running Playwright tests in PARALLEL..."
+    echo "Running: $SPEC_FILE..."
     echo "Running tests..." >> "$LOGFILE"
 
-    # Run all tests in parallel (Playwright handles parallelization)
+    # Run the single spec file (tests within file run serially due to config)
     local TEST_EXIT_CODE=0
-    npx playwright test $TEST_PATTERN --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
+    npx playwright test "tests/$SPEC_FILE" --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
 
     # Calculate duration
-    END_TIME=$(date +%s)
-    DURATION=$((END_TIME - START_TIME))
+    local END_TIME=$(date +%s)
+    local DURATION=$((END_TIME - START_TIME))
 
     echo "Duration: $DURATION seconds" >> "$LOGFILE"
 
@@ -70,55 +72,78 @@ run_tests() {
     local STATUS
     if [ $TEST_EXIT_CODE -eq 0 ]; then
         STATUS="PASSED"
-        echo "[PASSED] All tests passed"
+        echo "[PASSED] $SPEC_FILE"
     else
         STATUS="FAILED"
-        OVERALL_EXIT_CODE=1
-        echo "[FAILED] Some tests failed"
+        echo "[FAILED] $SPEC_FILE"
     fi
 
     echo "Test finished with status: $STATUS" >> "$LOGFILE"
     echo "Exit code: $TEST_EXIT_CODE" >> "$LOGFILE"
 
-    # Send Telegram notification
-    echo "Sending Telegram notification..."
-    node scripts/send-telegram.js "$STATUS" "$DURATION" "$TEST_DISPLAY_NAME" "$TEST_DISPLAY_NAME" "$LOGFILE" || true
+    # Send Telegram notification immediately for this spec file
+    echo "Sending Telegram notification for $SPEC_FILE..."
+    node scripts/send-telegram.js "$STATUS" "$DURATION" "$SPEC_FILE" "$SPEC_FILE" "$LOGFILE" || true
+
+    # Return exit code
+    return $TEST_EXIT_CODE
 }
 
-# Build test pattern from TEST_FILE
+# Check if running all tests
 if [ "$TEST_FILE" = "all" ]; then
     echo ""
-    echo "Running ALL tests in parallel..."
-    run_tests "tests/" "All Tests"
+    echo "Running ALL spec files in parallel..."
+
+    # Find all spec files and run them in parallel
+    for SPEC in tests/*.spec.ts; do
+        SPEC_NAME=$(basename "$SPEC")
+        run_single_spec "$SPEC_NAME" &
+        PIDS+=($!)
+    done
 
 # Check if multiple files (contains comma)
 elif [[ "$TEST_FILE" == *","* ]]; then
     echo ""
-    echo "Multiple files detected, running ALL in parallel..."
+    echo "Multiple files detected, running in PARALLEL..."
+    echo "Each file will send its own Telegram notification when done."
 
-    # Parse comma-separated files and build pattern
+    # Parse comma-separated files
     IFS=',' read -ra FILES <<< "$TEST_FILE"
-    TEST_PATTERNS=""
 
     for FILE in "${FILES[@]}"; do
         # Remove whitespace
         FILE=$(echo "$FILE" | xargs)
-        TEST_PATTERNS="$TEST_PATTERNS tests/$FILE"
+        echo "Launching: $FILE"
+        run_single_spec "$FILE" &
+        PIDS+=($!)
     done
-
-    echo "Test files: $TEST_PATTERNS"
-    run_tests "$TEST_PATTERNS" "$TEST_FILE"
 
 # Single file mode
 else
     echo ""
     echo "Running single test file: $TEST_FILE"
-    run_tests "tests/$TEST_FILE" "$TEST_FILE"
+    run_single_spec "$TEST_FILE"
+    OVERALL_EXIT_CODE=$?
+fi
+
+# Wait for all background processes if any
+if [ ${#PIDS[@]} -gt 0 ]; then
+    echo ""
+    echo "Waiting for all spec files to complete..."
+
+    for PID in "${PIDS[@]}"; do
+        wait $PID
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            OVERALL_EXIT_CODE=1
+        fi
+    done
 fi
 
 echo ""
 echo "========================================"
-echo "  All Tests Complete! Check Telegram."
+echo "  All Tests Complete!"
+echo "  Overall Status: $([ $OVERALL_EXIT_CODE -eq 0 ] && echo 'PASSED' || echo 'FAILED')"
 echo "========================================"
 echo ""
 
