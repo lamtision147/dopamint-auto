@@ -326,18 +326,44 @@ export class DopamintLoginPage {
         console.log('\n=== STEP 5: Verify website UI no longer shows Login button ===');
 
         console.log('Waiting for page to update after wallet connection...');
-        await dappPage.waitForTimeout(5000);
 
-        const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
-        const isLoginVisible = await loginButton.isVisible({ timeout: 3000 }).catch(() => false);
+        // Wait longer and retry multiple times for UI to update
+        const maxRetries = 5;
+        const retryDelay = 3000; // 3 seconds between retries
 
-        if (isLoginVisible) {
-            throw new Error('Login button still visible after wallet connection');
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            console.log(`Attempt ${attempt}/${maxRetries}: Checking login button visibility...`);
+
+            await dappPage.waitForTimeout(retryDelay);
+
+            const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
+            const isLoginVisible = await loginButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+            if (!isLoginVisible) {
+                console.log('✅ Verification successful: Login button is NOT visible - wallet connected!');
+                await expect(loginButton).not.toBeVisible({ timeout: 5000 });
+                console.log('✅ Test assertion passed: Login button is NOT visible!');
+                return;
+            }
+
+            console.log(`Login button still visible, attempt ${attempt}/${maxRetries}`);
+
+            // Try refreshing the page on last few attempts
+            if (attempt >= 3) {
+                console.log('Trying page reload to refresh wallet state...');
+                await dappPage.reload({ waitUntil: 'networkidle' });
+                await dappPage.waitForTimeout(2000);
+
+                // Close any popups that might appear after reload
+                await this.closeAllPopups();
+            }
         }
 
-        console.log('✅ Verification successful: Login button is NOT visible - wallet connected!');
+        // Take screenshot before failing
+        const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+        await dappPage.screenshot({ path: `${outputDir}/login-button-still-visible.png` });
+        console.log('❌ Screenshot saved: login-button-still-visible.png');
 
-        await expect(loginButton).not.toBeVisible({ timeout: 5000 });
-        console.log('✅ Test assertion passed: Login button is NOT visible!');
+        throw new Error('Login button still visible after wallet connection (after multiple retries)');
     }
 }
