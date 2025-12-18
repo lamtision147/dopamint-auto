@@ -112,31 +112,49 @@ function sendTelegramPhoto(photoPath, caption) {
     });
 }
 
-// Get screenshots based on test status
-function getScreenshots(status) {
+// Get screenshots based on test status and test file
+function getScreenshots(status, testFile = '') {
     const testResultsDir = path.join(__dirname, '..', 'test-results');
-    if (!fs.existsSync(testResultsDir)) return [];
+    if (!fs.existsSync(testResultsDir)) {
+        console.log('No test-results directory found');
+        return [];
+    }
 
     const screenshots = [];
 
     // Recursive function to find all PNG files
     function findPngFiles(dir) {
-        const items = fs.readdirSync(dir);
-        for (const item of items) {
-            const fullPath = path.join(dir, item);
-            const stat = fs.statSync(fullPath);
-            if (stat.isDirectory()) {
-                findPngFiles(fullPath);
-            } else if (item.endsWith('.png')) {
-                screenshots.push(fullPath);
+        try {
+            const items = fs.readdirSync(dir);
+            for (const item of items) {
+                const fullPath = path.join(dir, item);
+                try {
+                    const stat = fs.statSync(fullPath);
+                    if (stat.isDirectory()) {
+                        findPngFiles(fullPath);
+                    } else if (item.endsWith('.png')) {
+                        screenshots.push(fullPath);
+                    }
+                } catch (err) {
+                    // Skip files we can't access
+                }
             }
+        } catch (err) {
+            console.error('Error reading directory:', dir, err.message);
         }
     }
 
     findPngFiles(testResultsDir);
+    console.log(`Found ${screenshots.length} total screenshots in test-results`);
 
     // Sort by modification time (newest first)
-    const sorted = screenshots.sort((a, b) => fs.statSync(b).mtime - fs.statSync(a).mtime);
+    const sorted = screenshots.sort((a, b) => {
+        try {
+            return fs.statSync(b).mtime - fs.statSync(a).mtime;
+        } catch {
+            return 0;
+        }
+    });
 
     if (status === 'PASSED') {
         // Only send success/verification screenshots (max 3)
@@ -151,18 +169,26 @@ function getScreenshots(status) {
                    name.includes('sell-success') ||
                    name.includes('search-result');
         });
+        console.log(`Found ${successScreenshots.length} success screenshots`);
         return successScreenshots.slice(0, 3);
     } else {
-        // Send debug/failure screenshots (max 3)
+        // Send debug/failure screenshots (max 5 for failed tests)
         const failScreenshots = sorted.filter(f => {
             const name = path.basename(f).toLowerCase();
-            return name.includes('fail') ||
+            // Match FAILED-ModelName-page-X.png and other failure patterns
+            return name.startsWith('failed') ||
+                   name.includes('fail') ||
                    name.includes('error') ||
-                   name.includes('debug') ||
-                   name.includes('step');
+                   name.includes('debug');
         });
+
+        console.log(`Found ${failScreenshots.length} failure screenshots:`);
+        failScreenshots.forEach(f => console.log(`  - ${path.basename(f)}`));
+
         // If no specific fail screenshots, return the most recent ones
-        return (failScreenshots.length > 0 ? failScreenshots : sorted).slice(0, 3);
+        const result = (failScreenshots.length > 0 ? failScreenshots : sorted).slice(0, 5);
+        console.log(`Returning ${result.length} screenshots for FAILED status`);
+        return result;
     }
 }
 
@@ -389,8 +415,8 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         console.log('✅ Telegram message sent!');
 
         // Send relevant screenshots based on status
-        const screenshots = getScreenshots(status);
-        console.log(`Found ${screenshots.length} screenshots to send (status: ${status})`);
+        const screenshots = getScreenshots(status, testFile);
+        console.log(`Will send ${screenshots.length} screenshots (status: ${status})`);
 
         for (let i = 0; i < screenshots.length; i++) {
             const screenshot = screenshots[i];
