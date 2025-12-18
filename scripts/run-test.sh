@@ -180,37 +180,90 @@ run_single_spec() {
 # Track overall exit code
 OVERALL_EXIT_CODE=0
 
+# Delay between parallel test starts (seconds) - to avoid MetaMask conflicts
+STAGGER_DELAY=90
+
 # Check if running all tests
 if [ "$TEST_FILE" = "all" ]; then
     echo ""
-    echo "Running ALL spec files SEQUENTIALLY..."
+    echo "Running ALL spec files with STAGGERED PARALLEL execution..."
     echo "Each file will send its own Telegram notification when done."
-    echo "(Parallel execution disabled due to MetaMask/dappwright conflicts)"
+    echo "Delay between starts: ${STAGGER_DELAY}s"
+
+    declare -a PIDS=()
+    declare -a SPEC_NAMES=()
+    SPEC_INDEX=0
 
     for SPEC in tests/*.spec.ts; do
         SPEC_NAME=$(basename "$SPEC")
-        run_single_spec "$SPEC_NAME"
-        if [ $? -ne 0 ]; then
+        SPEC_NAMES+=("$SPEC_NAME")
+
+        if [ $SPEC_INDEX -gt 0 ]; then
+            echo "Waiting ${STAGGER_DELAY}s before starting $SPEC_NAME..."
+            sleep $STAGGER_DELAY
+        fi
+
+        echo "Starting: $SPEC_NAME (index: $SPEC_INDEX)"
+        run_single_spec_parallel "$SPEC_NAME" "$SPEC_INDEX" &
+        PIDS+=($!)
+        ((SPEC_INDEX++))
+    done
+
+    echo ""
+    echo "Waiting for ${#PIDS[@]} tests to complete..."
+
+    for i in "${!PIDS[@]}"; do
+        wait ${PIDS[$i]}
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
             OVERALL_EXIT_CODE=1
+            echo "  [FAILED] ${SPEC_NAMES[$i]}"
+        else
+            echo "  [PASSED] ${SPEC_NAMES[$i]}"
         fi
     done
 
 # Check if multiple files (contains comma)
 elif [[ "$TEST_FILE" == *","* ]]; then
     echo ""
-    echo "Multiple files detected, running SEQUENTIALLY..."
+    echo "Multiple files detected, running with STAGGERED PARALLEL execution..."
     echo "Each file will send its own Telegram notification when done."
-    echo "(Parallel execution disabled due to MetaMask/dappwright conflicts)"
+    echo "Delay between starts: ${STAGGER_DELAY}s"
+
+    declare -a PIDS=()
+    declare -a SPEC_NAMES=()
 
     # Parse comma-separated files
     IFS=',' read -ra FILES <<< "$TEST_FILE"
 
+    SPEC_INDEX=0
     for FILE in "${FILES[@]}"; do
         # Remove whitespace
         FILE=$(echo "$FILE" | xargs)
-        run_single_spec "$FILE"
-        if [ $? -ne 0 ]; then
+        SPEC_NAMES+=("$FILE")
+
+        if [ $SPEC_INDEX -gt 0 ]; then
+            echo "Waiting ${STAGGER_DELAY}s before starting $FILE..."
+            sleep $STAGGER_DELAY
+        fi
+
+        echo "Starting: $FILE (index: $SPEC_INDEX)"
+        run_single_spec_parallel "$FILE" "$SPEC_INDEX" &
+        PIDS+=($!)
+        ((SPEC_INDEX++))
+    done
+
+    echo ""
+    echo "Waiting for ${#PIDS[@]} tests to complete..."
+
+    for i in "${!PIDS[@]}"; do
+        wait ${PIDS[$i]}
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
             OVERALL_EXIT_CODE=1
+            echo "  [FAILED] ${SPEC_NAMES[$i]}"
+        else
+            echo "  [PASSED] ${SPEC_NAMES[$i]}"
         fi
     done
 
