@@ -3,7 +3,7 @@
 # ========================================
 # Dopamint Playwright Auto Test Runner
 # For AWS CodeBuild / Linux environments
-# - Spec files run SEQUENTIALLY (one at a time)
+# - Spec files run IN PARALLEL (each with unique TMPDIR)
 # - Each spec file sends its own Telegram notification
 # - Test cases within each file run SERIALLY
 # ========================================
@@ -29,13 +29,77 @@ rm -f test-results/token-urls.json
 rm -f test-results/collection-url.txt
 rm -f test-results/create-info.json
 
-# Clean up dappwright session to avoid conflicts
-rm -rf /tmp/dappwright/session 2>/dev/null || true
+# Clean up dappwright sessions to avoid conflicts
+rm -rf /tmp/dappwright* 2>/dev/null || true
 
-# Track overall exit code
-OVERALL_EXIT_CODE=0
+# Array to track background PIDs
+declare -a PIDS=()
+declare -a SPEC_NAMES=()
 
-# Function to run a single spec file and send notification
+# Function to run a single spec file with unique TMPDIR
+run_single_spec_parallel() {
+    local SPEC_FILE="$1"
+    local SPEC_INDEX="$2"
+    local TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    local LOGFILE="test-results/test-log-${SPEC_FILE}-${TIMESTAMP}.txt"
+
+    # Create unique TMPDIR for this spec file to avoid dappwright session conflicts
+    local UNIQUE_TMPDIR="/tmp/dappwright-${SPEC_INDEX}-$$"
+    mkdir -p "$UNIQUE_TMPDIR"
+
+    echo ""
+    echo "========================================"
+    echo "  Starting: $SPEC_FILE (parallel, TMPDIR=$UNIQUE_TMPDIR)"
+    echo "========================================"
+
+    # Log start
+    echo "========================================" >> "$LOGFILE"
+    echo "Test started at $(date)" >> "$LOGFILE"
+    echo "Test file: $SPEC_FILE" >> "$LOGFILE"
+    echo "TMPDIR: $UNIQUE_TMPDIR" >> "$LOGFILE"
+    echo "========================================" >> "$LOGFILE"
+
+    # Record start time
+    local START_TIME=$(date +%s)
+
+    echo "Running: $SPEC_FILE..."
+    echo "Running tests..." >> "$LOGFILE"
+
+    # Run the single spec file with unique TMPDIR
+    local TEST_EXIT_CODE=0
+    TMPDIR="$UNIQUE_TMPDIR" npx playwright test "tests/$SPEC_FILE" --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
+
+    # Calculate duration
+    local END_TIME=$(date +%s)
+    local DURATION=$((END_TIME - START_TIME))
+
+    echo "Duration: $DURATION seconds" >> "$LOGFILE"
+
+    # Determine status based on exit code
+    local STATUS
+    if [ $TEST_EXIT_CODE -eq 0 ]; then
+        STATUS="PASSED"
+        echo "[PASSED] $SPEC_FILE (exit code: $TEST_EXIT_CODE, duration: ${DURATION}s)"
+    else
+        STATUS="FAILED"
+        echo "[FAILED] $SPEC_FILE (exit code: $TEST_EXIT_CODE, duration: ${DURATION}s)"
+    fi
+
+    echo "Test finished with status: $STATUS" >> "$LOGFILE"
+    echo "Exit code: $TEST_EXIT_CODE" >> "$LOGFILE"
+
+    # Send Telegram notification for this spec file
+    echo "Sending Telegram notification for $SPEC_FILE..."
+    node scripts/send-telegram.js "$STATUS" "$DURATION" "$SPEC_FILE" "$SPEC_FILE" "$LOGFILE" || true
+
+    # Clean up unique TMPDIR
+    rm -rf "$UNIQUE_TMPDIR" 2>/dev/null || true
+
+    # Return exit code
+    return $TEST_EXIT_CODE
+}
+
+# Function to run a single spec file sequentially (for single file mode)
 run_single_spec() {
     local SPEC_FILE="$1"
     local TIMESTAMP=$(date +%Y%m%d-%H%M%S)
@@ -46,7 +110,7 @@ run_single_spec() {
     echo "  Running: $SPEC_FILE"
     echo "========================================"
 
-    # Clean up dappwright session before each test
+    # Clean up dappwright session before test
     rm -rf /tmp/dappwright/session 2>/dev/null || true
 
     # Log start
@@ -91,38 +155,76 @@ run_single_spec() {
 
     # Clean up session after test
     rm -rf /tmp/dappwright/session 2>/dev/null || true
-
-    # Small delay between tests
-    sleep 2
 }
+
+# Track overall exit code
+OVERALL_EXIT_CODE=0
 
 # Check if running all tests
 if [ "$TEST_FILE" = "all" ]; then
     echo ""
-    echo "Running ALL spec files sequentially..."
+    echo "Running ALL spec files IN PARALLEL..."
+    echo "Each file will send its own Telegram notification when done."
 
-    # Find all spec files and run them one by one
+    SPEC_INDEX=0
     for SPEC in tests/*.spec.ts; do
         SPEC_NAME=$(basename "$SPEC")
-        run_single_spec "$SPEC_NAME"
+        SPEC_NAMES+=("$SPEC_NAME")
+        run_single_spec_parallel "$SPEC_NAME" "$SPEC_INDEX" &
+        PIDS+=($!)
+        ((SPEC_INDEX++))
+    done
+
+    echo ""
+    echo "Waiting for ${#PIDS[@]} parallel tests to complete..."
+
+    # Wait for all background processes
+    for i in "${!PIDS[@]}"; do
+        wait ${PIDS[$i]}
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            OVERALL_EXIT_CODE=1
+            echo "  [FAILED] ${SPEC_NAMES[$i]}"
+        else
+            echo "  [PASSED] ${SPEC_NAMES[$i]}"
+        fi
     done
 
 # Check if multiple files (contains comma)
 elif [[ "$TEST_FILE" == *","* ]]; then
     echo ""
-    echo "Multiple files detected, running SEQUENTIALLY..."
+    echo "Multiple files detected, running IN PARALLEL..."
     echo "Each file will send its own Telegram notification when done."
 
     # Parse comma-separated files
     IFS=',' read -ra FILES <<< "$TEST_FILE"
 
+    SPEC_INDEX=0
     for FILE in "${FILES[@]}"; do
         # Remove whitespace
         FILE=$(echo "$FILE" | xargs)
-        run_single_spec "$FILE"
+        SPEC_NAMES+=("$FILE")
+        run_single_spec_parallel "$FILE" "$SPEC_INDEX" &
+        PIDS+=($!)
+        ((SPEC_INDEX++))
     done
 
-# Single file mode
+    echo ""
+    echo "Waiting for ${#PIDS[@]} parallel tests to complete..."
+
+    # Wait for all background processes
+    for i in "${!PIDS[@]}"; do
+        wait ${PIDS[$i]}
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            OVERALL_EXIT_CODE=1
+            echo "  [FAILED] ${SPEC_NAMES[$i]}"
+        else
+            echo "  [PASSED] ${SPEC_NAMES[$i]}"
+        fi
+    done
+
+# Single file mode - run sequentially (no parallel needed)
 else
     echo ""
     echo "Running single test file: $TEST_FILE"

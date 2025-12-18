@@ -147,10 +147,10 @@ function getScreenshots(status, testFile = '') {
     findPngFiles(testResultsDir);
     console.log(`Found ${screenshots.length} total screenshots in test-results`);
 
-    // Sort by modification time (newest first)
+    // Sort by modification time (oldest first - chronological order)
     const sorted = screenshots.sort((a, b) => {
         try {
-            return fs.statSync(b).mtime - fs.statSync(a).mtime;
+            return fs.statSync(a).mtime - fs.statSync(b).mtime;
         } catch {
             return 0;
         }
@@ -368,7 +368,7 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
                 message += `\n   📦 Collection: ${result.collectionName || 'N/A'}`;
                 message += `\n   🎨 Minted: ${result.mintedCount || 0} NFTs`;
                 if (result.collectionUrl) {
-                    message += `\n   🔗 ${result.collectionUrl}`;
+                    message += `\n   🔗 Collection URL: ${result.collectionUrl}`;
                 }
             } else {
                 message += `\n   ⚠️ Status: FAILED`;
@@ -386,8 +386,8 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         message += `\n\n📈 <b>Summary:</b> ${passedCount} passed, ${failedCount} failed`;
     }
 
-    // Add URL if exists
-    if (collectionUrl) {
+    // Add URL if exists (skip for create test since each model already has its URL)
+    if (collectionUrl && !testFile.includes('create')) {
         message += `\n\n🔗 Collection: ${collectionUrl}`;
     }
 
