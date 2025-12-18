@@ -113,8 +113,17 @@ function sendTelegramPhoto(photoPath, caption) {
 }
 
 // Get screenshots based on test status and test file
-function getScreenshots(status, testFile = '') {
-    const testResultsDir = path.join(__dirname, '..', 'test-results');
+function getScreenshots(status, testFile = '', outputDir = '') {
+    // Use spec-specific output directory if provided, otherwise use default
+    let testResultsDir;
+    if (outputDir && fs.existsSync(outputDir)) {
+        testResultsDir = outputDir;
+        console.log(`Using spec-specific output dir: ${outputDir}`);
+    } else {
+        testResultsDir = path.join(__dirname, '..', 'test-results');
+        console.log(`Using default test-results dir: ${testResultsDir}`);
+    }
+
     if (!fs.existsSync(testResultsDir)) {
         console.log('No test-results directory found');
         return [];
@@ -193,39 +202,51 @@ function getScreenshots(status, testFile = '') {
 }
 
 // Read collection URL from file (saved by test)
-function getCollectionUrl() {
-    const urlFile = path.join(__dirname, '..', 'test-results', 'collection-url.txt');
-    if (fs.existsSync(urlFile)) {
-        return fs.readFileSync(urlFile, 'utf8').trim();
+function getCollectionUrl(outputDir = '') {
+    // Try spec-specific directory first, then default
+    const dirs = outputDir ? [outputDir, path.join(__dirname, '..', 'test-results')] : [path.join(__dirname, '..', 'test-results')];
+    for (const dir of dirs) {
+        const urlFile = path.join(dir, 'collection-url.txt');
+        if (fs.existsSync(urlFile)) {
+            return fs.readFileSync(urlFile, 'utf8').trim();
+        }
     }
     return null;
 }
 
 // Read token URLs from file (saved by searchMintSell test)
-function getTokenUrls() {
-    const tokenFile = path.join(__dirname, '..', 'test-results', 'token-urls.json');
-    if (fs.existsSync(tokenFile)) {
-        try {
-            const content = fs.readFileSync(tokenFile, 'utf8');
-            return JSON.parse(content);
-        } catch (e) {
-            console.error('Error reading token-urls.json:', e.message);
+function getTokenUrls(outputDir = '') {
+    // Try spec-specific directory first, then default
+    const dirs = outputDir ? [outputDir, path.join(__dirname, '..', 'test-results')] : [path.join(__dirname, '..', 'test-results')];
+    for (const dir of dirs) {
+        const tokenFile = path.join(dir, 'token-urls.json');
+        if (fs.existsSync(tokenFile)) {
+            try {
+                const content = fs.readFileSync(tokenFile, 'utf8');
+                return JSON.parse(content);
+            } catch (e) {
+                console.error('Error reading token-urls.json:', e.message);
+            }
         }
     }
     return null;
 }
 
 // Read create info from file (saved by create test) - returns array of all model results
-function getCreateInfo() {
-    const createFile = path.join(__dirname, '..', 'test-results', 'create-info.json');
-    if (fs.existsSync(createFile)) {
-        try {
-            const content = fs.readFileSync(createFile, 'utf8');
-            const parsed = JSON.parse(content);
-            // Ensure it's always an array
-            return Array.isArray(parsed) ? parsed : [parsed];
-        } catch (e) {
-            console.error('Error reading create-info.json:', e.message);
+function getCreateInfo(outputDir = '') {
+    // Try spec-specific directory first, then default
+    const dirs = outputDir ? [outputDir, path.join(__dirname, '..', 'test-results')] : [path.join(__dirname, '..', 'test-results')];
+    for (const dir of dirs) {
+        const createFile = path.join(dir, 'create-info.json');
+        if (fs.existsSync(createFile)) {
+            try {
+                const content = fs.readFileSync(createFile, 'utf8');
+                const parsed = JSON.parse(content);
+                // Ensure it's always an array
+                return Array.isArray(parsed) ? parsed : [parsed];
+            } catch (e) {
+                console.error('Error reading create-info.json:', e.message);
+            }
         }
     }
     return null;
@@ -307,6 +328,7 @@ async function main() {
     const testName = args[2] || 'Dopamint Test';
     const testFile = args[3] || '';
     const logFile = args[4] || '';
+    const outputDir = args[5] || '';  // Spec-specific output directory
 
     const timestamp = new Date().toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
@@ -322,14 +344,14 @@ async function main() {
     const statusText = status === 'PASSED' ? 'PASSED' : 'FAILED';
     const formattedDuration = formatDuration(parseFloat(duration));
 
-    // Get collection URL if exists
-    const collectionUrl = getCollectionUrl();
+    // Get collection URL if exists (check spec-specific dir first)
+    const collectionUrl = getCollectionUrl(outputDir);
 
     // Get token URLs if exists (for searchMintSell test)
-    const tokenUrls = getTokenUrls();
+    const tokenUrls = getTokenUrls(outputDir);
 
     // Get create info if exists (for create test)
-    const createInfo = getCreateInfo();
+    const createInfo = getCreateInfo(outputDir);
 
     let message = `
 ${emoji} <b>DOPAMINT AUTO TEST</b>
@@ -414,8 +436,8 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         await sendTelegramMessage(message);
         console.log('✅ Telegram message sent!');
 
-        // Send relevant screenshots based on status
-        const screenshots = getScreenshots(status, testFile);
+        // Send relevant screenshots based on status (use spec-specific output dir)
+        const screenshots = getScreenshots(status, testFile, outputDir);
         console.log(`Will send ${screenshots.length} screenshots (status: ${status})`);
 
         for (let i = 0; i < screenshots.length; i++) {

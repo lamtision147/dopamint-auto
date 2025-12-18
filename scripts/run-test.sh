@@ -41,7 +41,12 @@ run_single_spec_parallel() {
     local SPEC_FILE="$1"
     local SPEC_INDEX="$2"
     local TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    local LOGFILE="test-results/test-log-${SPEC_FILE}-${TIMESTAMP}.txt"
+
+    # Create unique output directory for this spec file to avoid screenshot conflicts
+    local SPEC_OUTPUT_DIR="test-results/${SPEC_FILE%.*}"
+    mkdir -p "$SPEC_OUTPUT_DIR"
+
+    local LOGFILE="${SPEC_OUTPUT_DIR}/test-log-${TIMESTAMP}.txt"
 
     # Create unique TMPDIR for this spec file to avoid dappwright session conflicts
     local UNIQUE_TMPDIR="/tmp/dappwright-${SPEC_INDEX}-$$"
@@ -50,6 +55,7 @@ run_single_spec_parallel() {
     echo ""
     echo "========================================"
     echo "  Starting: $SPEC_FILE (parallel, TMPDIR=$UNIQUE_TMPDIR)"
+    echo "  Output: $SPEC_OUTPUT_DIR"
     echo "========================================"
 
     # Log start
@@ -57,6 +63,7 @@ run_single_spec_parallel() {
     echo "Test started at $(date)" >> "$LOGFILE"
     echo "Test file: $SPEC_FILE" >> "$LOGFILE"
     echo "TMPDIR: $UNIQUE_TMPDIR" >> "$LOGFILE"
+    echo "Output dir: $SPEC_OUTPUT_DIR" >> "$LOGFILE"
     echo "========================================" >> "$LOGFILE"
 
     # Record start time
@@ -65,9 +72,11 @@ run_single_spec_parallel() {
     echo "Running: $SPEC_FILE..."
     echo "Running tests..." >> "$LOGFILE"
 
-    # Run the single spec file with unique TMPDIR
-    local TEST_EXIT_CODE=0
-    TMPDIR="$UNIQUE_TMPDIR" npx playwright test "tests/$SPEC_FILE" --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
+    # Run the single spec file with unique TMPDIR and output directory
+    # Use PIPESTATUS to capture playwright exit code, not tee's
+    TMPDIR="$UNIQUE_TMPDIR" PLAYWRIGHT_OUTPUT_DIR="$SPEC_OUTPUT_DIR" \
+        npx playwright test "tests/$SPEC_FILE" --reporter=list --output="$SPEC_OUTPUT_DIR" 2>&1 | tee -a "$LOGFILE"
+    local TEST_EXIT_CODE=${PIPESTATUS[0]}
 
     # Calculate duration
     local END_TIME=$(date +%s)
@@ -88,9 +97,9 @@ run_single_spec_parallel() {
     echo "Test finished with status: $STATUS" >> "$LOGFILE"
     echo "Exit code: $TEST_EXIT_CODE" >> "$LOGFILE"
 
-    # Send Telegram notification for this spec file
+    # Send Telegram notification for this spec file with its output directory
     echo "Sending Telegram notification for $SPEC_FILE..."
-    node scripts/send-telegram.js "$STATUS" "$DURATION" "$SPEC_FILE" "$SPEC_FILE" "$LOGFILE" || true
+    node scripts/send-telegram.js "$STATUS" "$DURATION" "$SPEC_FILE" "$SPEC_FILE" "$LOGFILE" "$SPEC_OUTPUT_DIR" || true
 
     # Clean up unique TMPDIR
     rm -rf "$UNIQUE_TMPDIR" 2>/dev/null || true

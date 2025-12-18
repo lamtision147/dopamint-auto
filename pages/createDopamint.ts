@@ -2,6 +2,10 @@ import { BrowserContext, Page, expect, Locator } from "@playwright/test";
 import { Dappwright } from "@tenkeylabs/dappwright";
 import { CREATE_SELECTORS } from '../xpath/dopamintCreate';
 import path from 'path';
+import fs from 'fs';
+
+// Get output directory (spec-specific or default)
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
 // Model type definition
 export type AIModel = 'Nano Banana Pro' | 'Nano Banana' | 'ChatGPT';
@@ -475,7 +479,7 @@ export class DopamintCreatePage {
         if (!generateClicked) {
             console.log('⚠️ Could not click Generate button!');
             // Screenshot for debug
-            await this.page.screenshot({ path: 'test-results/generate-button-not-found.png' });
+            await this.page.screenshot({ path: `${outputDir}/generate-button-not-found.png` });
         }
 
         await this.page.waitForTimeout(2000);
@@ -728,13 +732,13 @@ export class DopamintCreatePage {
         }
 
         // Take screenshot of collection page
-        await newPage.screenshot({ path: 'test-results/collection-page.png' });
+        await newPage.screenshot({ path: `${outputDir}/collection-page.png` });
         console.log('✅ Screenshot of collection page saved!');
 
         // Save collection URL to file for Telegram notification
         const collectionUrl = newPage.url();
         const fs = await import('fs');
-        fs.writeFileSync('test-results/collection-url.txt', collectionUrl);
+        fs.writeFileSync(`${outputDir}/collection-url.txt`, collectionUrl);
         console.log(`✅ Collection URL saved: ${collectionUrl}`);
 
         // Return the new page for further actions

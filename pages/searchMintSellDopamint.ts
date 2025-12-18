@@ -3,6 +3,9 @@ import { Dappwright } from "@tenkeylabs/dappwright";
 import { SEARCH_MINT_SELL_SELECTORS } from '../xpath/dopamintSearchMintSell';
 import path from 'path';
 
+// Get output directory (spec-specific or default)
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+
 export class SearchMintSellPage {
     readonly context: BrowserContext;
     readonly wallet: Dappwright;
@@ -176,7 +179,7 @@ export class SearchMintSellPage {
         await this.page.waitForTimeout(3000);
 
         // Screenshot search results dropdown BEFORE clicking
-        await this.page.screenshot({ path: 'test-results/search-result.png' });
+        await this.page.screenshot({ path: `${outputDir}/search-result.png` });
         console.log('Screenshot saved: search-result.png (search dropdown)');
 
         // Setup listener for new page before clicking
@@ -1140,7 +1143,7 @@ export class SearchMintSellPage {
         if (stillOpen) {
             console.log('Warning: Popup still open after all attempts');
             // Screenshot for debug
-            await page.screenshot({ path: 'test-results/popup-still-open.png' });
+            await page.screenshot({ path: `${outputDir}/popup-still-open.png` });
 
             // Last resort: try to click anywhere outside
             await page.mouse.click(10, 10);

@@ -9,6 +9,9 @@ import path from 'path';
 // Load environment variables from .env.test
 dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 
+// Get output directory (spec-specific or default)
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+
 export const test = baseTest.extend<{
     context: BrowserContext;
     wallet: Dappwright;
@@ -63,7 +66,7 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         }
 
         // Screenshot collection details page
-        await collectionPage.screenshot({ path: 'test-results/collection-details.png' });
+        await collectionPage.screenshot({ path: `${outputDir}/collection-details.png` });
         console.log('Screenshot saved: collection-details.png');
 
         // ========== PHASE 4: MINT 2 NFTs ==========
@@ -91,7 +94,7 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         console.log(`\nSuccessfully minted ${mintResult.count} NFTs!`);
 
         // Screenshot mint success
-        await collectionPage.screenshot({ path: 'test-results/mint-success.png' });
+        await collectionPage.screenshot({ path: `${outputDir}/mint-success.png` });
         console.log('Screenshot saved: mint-success.png');
 
         // ========== PHASE 5: CLOSE POPUP AND VERIFY MINTED NFTs ==========
@@ -149,7 +152,7 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         console.log('----------------------\n');
 
         // Screenshot sell success
-        await collectionPage.screenshot({ path: 'test-results/sell-success.png' });
+        await collectionPage.screenshot({ path: `${outputDir}/sell-success.png` });
         console.log('Screenshot saved: sell-success.png');
 
         console.log('\n========================================');
@@ -169,7 +172,7 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
 
         // Save minted/sold token URLs to file for Telegram notification
         const fs = await import('fs');
-        const tokenInfoPath = path.resolve(__dirname, '../test-results/token-urls.json');
+        const tokenInfoPath = path.resolve(outputDir, 'token-urls.json');
         const tokenInfo = {
             mintedUrls: mintedTokenUrls,
             soldUrl: soldTokenUrl || '',

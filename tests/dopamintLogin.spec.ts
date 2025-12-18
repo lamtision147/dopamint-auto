@@ -9,6 +9,9 @@ import path from 'path';
 // Load environment variables from .env.test
 dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 
+// Get output directory (spec-specific or default)
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+
 const DOPAMINT_EMAIL = process.env.DOPAMINT_EMAIL!;
 const DOPAMINT_PASSWORD = process.env.DOPAMINT_PASSWORD!;
 const baseUrl = 'https://dev.dopamint.ai/';
@@ -47,7 +50,7 @@ test.describe('Login', () => {
       await dopamintPage.loginWithMetaMask();
       await dopamintPage.verifyLoginButtonHidden();
       
-      await dappPage.screenshot({ path: 'test-results/dopamint-metamask-connected.png' });
+      await dappPage.screenshot({ path: `${outputDir}/dopamint-metamask-connected.png` });
     console.log('\n✅ TEST COMPLETED! Screenshot saved.');
 
 

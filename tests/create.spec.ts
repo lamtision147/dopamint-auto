@@ -10,6 +10,9 @@ import fs from 'fs';
 // Load environment variables from .env.test
 dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 
+// Get output directory (spec-specific or default)
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+
 export const test = baseTest.extend<{
     context: BrowserContext;
     wallet: Dappwright;
@@ -71,7 +74,7 @@ async function runCreateFlowWithModel(
     await createPage.waitForImageGeneration();
 
     // Screenshot after generation
-    await dappPage.screenshot({ path: 'test-results/after-generate.png' });
+    await dappPage.screenshot({ path: `${outputDir}/after-generate.png` });
 
     // STEP 4: Publish & Monetize
     console.log('\n========== PHASE 5: PUBLISH & MONETIZE ==========');
@@ -87,7 +90,7 @@ async function runCreateFlowWithModel(
     await createPage.waitForPublishSuccess();
 
     // Screenshot after successful publish
-    await dappPage.screenshot({ path: 'test-results/publish-success.png' });
+    await dappPage.screenshot({ path: `${outputDir}/publish-success.png` });
 
     // STEP 5: Go to collection and verify
     console.log('\n========== PHASE 6: VERIFY COLLECTION ==========');
@@ -123,7 +126,7 @@ async function runCreateFlowWithModel(
     console.log(`Successfully minted ${mintedCount} NFT!`);
 
     // Screenshot mint success
-    await collectionPage.screenshot({ path: 'test-results/mint-success.png' });
+    await collectionPage.screenshot({ path: `${outputDir}/mint-success.png` });
 
     // Close success popup
     await createPage.closeSuccessPopup(collectionPage);
@@ -139,7 +142,7 @@ async function runCreateFlowWithModel(
     console.log('========================================');
 
     // Save model info to file for Telegram notification (accumulate, don't overwrite)
-    const createInfoPath = path.resolve(__dirname, '../test-results/create-info.json');
+    const createInfoPath = path.resolve(outputDir, 'create-info.json');
 
     // Read existing results or start with empty array
     let allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string}> = [];
@@ -153,7 +156,7 @@ async function runCreateFlowWithModel(
     }
 
     // Get collection URL
-    const collectionUrlPath = path.resolve(__dirname, '../test-results/collection-url.txt');
+    const collectionUrlPath = path.resolve(outputDir, 'collection-url.txt');
     let collectionUrl = '';
     try {
         if (fs.existsSync(collectionUrlPath)) {
@@ -209,7 +212,7 @@ test.describe('Create NFT Flow', () => {
             for (let i = 0; i < pages.length; i++) {
                 try {
                     await pages[i].screenshot({
-                        path: `test-results/FAILED-${model}-page-${i}.png`,
+                        path: `${outputDir}/FAILED-${model}-page-${i}.png`,
                         fullPage: true
                     });
                     console.log(`Captured debug screenshot of page ${i}`);
@@ -219,7 +222,7 @@ test.describe('Create NFT Flow', () => {
             }
 
             // Save failed result to accumulate file
-            const createInfoPath = path.resolve(__dirname, '../test-results/create-info.json');
+            const createInfoPath = path.resolve(outputDir, 'create-info.json');
             let allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; error?: string}> = [];
             try {
                 if (fs.existsSync(createInfoPath)) {
