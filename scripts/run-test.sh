@@ -181,7 +181,7 @@ run_single_spec() {
 OVERALL_EXIT_CODE=0
 
 # Delay between parallel test starts (seconds) - to avoid MetaMask conflicts
-STAGGER_DELAY=90
+STAGGER_DELAY=30
 
 # Check if running all tests
 if [ "$TEST_FILE" = "all" ]; then
