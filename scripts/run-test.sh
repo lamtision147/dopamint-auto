@@ -3,7 +3,7 @@
 # ========================================
 # Dopamint Playwright Auto Test Runner
 # For AWS CodeBuild / Linux environments
-# - Multiple spec files run in PARALLEL
+# - Spec files run SEQUENTIALLY (one at a time)
 # - Each spec file sends its own Telegram notification
 # - Test cases within each file run SERIALLY
 # ========================================
@@ -29,11 +29,11 @@ rm -f test-results/token-urls.json
 rm -f test-results/collection-url.txt
 rm -f test-results/create-info.json
 
+# Clean up dappwright session to avoid conflicts
+rm -rf /tmp/dappwright/session 2>/dev/null || true
+
 # Track overall exit code
 OVERALL_EXIT_CODE=0
-
-# Array to store background PIDs
-declare -a PIDS
 
 # Function to run a single spec file and send notification
 run_single_spec() {
@@ -43,8 +43,11 @@ run_single_spec() {
 
     echo ""
     echo "========================================"
-    echo "  Starting: $SPEC_FILE"
+    echo "  Running: $SPEC_FILE"
     echo "========================================"
+
+    # Clean up dappwright session before each test
+    rm -rf /tmp/dappwright/session 2>/dev/null || true
 
     # Log start
     echo "========================================" >> "$LOGFILE"
@@ -58,7 +61,7 @@ run_single_spec() {
     echo "Running: $SPEC_FILE..."
     echo "Running tests..." >> "$LOGFILE"
 
-    # Run the single spec file (tests within file run serially due to config)
+    # Run the single spec file
     local TEST_EXIT_CODE=0
     npx playwright test "tests/$SPEC_FILE" --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
 
@@ -68,43 +71,46 @@ run_single_spec() {
 
     echo "Duration: $DURATION seconds" >> "$LOGFILE"
 
-    # Determine status
+    # Determine status based on exit code
     local STATUS
     if [ $TEST_EXIT_CODE -eq 0 ]; then
         STATUS="PASSED"
-        echo "[PASSED] $SPEC_FILE"
+        echo "[PASSED] $SPEC_FILE (exit code: $TEST_EXIT_CODE)"
     else
         STATUS="FAILED"
-        echo "[FAILED] $SPEC_FILE"
+        OVERALL_EXIT_CODE=1
+        echo "[FAILED] $SPEC_FILE (exit code: $TEST_EXIT_CODE)"
     fi
 
     echo "Test finished with status: $STATUS" >> "$LOGFILE"
     echo "Exit code: $TEST_EXIT_CODE" >> "$LOGFILE"
 
-    # Send Telegram notification immediately for this spec file
+    # Send Telegram notification for this spec file
     echo "Sending Telegram notification for $SPEC_FILE..."
     node scripts/send-telegram.js "$STATUS" "$DURATION" "$SPEC_FILE" "$SPEC_FILE" "$LOGFILE" || true
 
-    # Return exit code
-    return $TEST_EXIT_CODE
+    # Clean up session after test
+    rm -rf /tmp/dappwright/session 2>/dev/null || true
+
+    # Small delay between tests
+    sleep 2
 }
 
 # Check if running all tests
 if [ "$TEST_FILE" = "all" ]; then
     echo ""
-    echo "Running ALL spec files in parallel..."
+    echo "Running ALL spec files sequentially..."
 
-    # Find all spec files and run them in parallel
+    # Find all spec files and run them one by one
     for SPEC in tests/*.spec.ts; do
         SPEC_NAME=$(basename "$SPEC")
-        run_single_spec "$SPEC_NAME" &
-        PIDS+=($!)
+        run_single_spec "$SPEC_NAME"
     done
 
 # Check if multiple files (contains comma)
 elif [[ "$TEST_FILE" == *","* ]]; then
     echo ""
-    echo "Multiple files detected, running in PARALLEL..."
+    echo "Multiple files detected, running SEQUENTIALLY..."
     echo "Each file will send its own Telegram notification when done."
 
     # Parse comma-separated files
@@ -113,9 +119,7 @@ elif [[ "$TEST_FILE" == *","* ]]; then
     for FILE in "${FILES[@]}"; do
         # Remove whitespace
         FILE=$(echo "$FILE" | xargs)
-        echo "Launching: $FILE"
-        run_single_spec "$FILE" &
-        PIDS+=($!)
+        run_single_spec "$FILE"
     done
 
 # Single file mode
@@ -123,21 +127,6 @@ else
     echo ""
     echo "Running single test file: $TEST_FILE"
     run_single_spec "$TEST_FILE"
-    OVERALL_EXIT_CODE=$?
-fi
-
-# Wait for all background processes if any
-if [ ${#PIDS[@]} -gt 0 ]; then
-    echo ""
-    echo "Waiting for all spec files to complete..."
-
-    for PID in "${PIDS[@]}"; do
-        wait $PID
-        EXIT_CODE=$?
-        if [ $EXIT_CODE -ne 0 ]; then
-            OVERALL_EXIT_CODE=1
-        fi
-    done
 fi
 
 echo ""
