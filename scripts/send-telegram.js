@@ -189,18 +189,26 @@ function getTokenUrls() {
     return null;
 }
 
-// Read create info from file (saved by create test)
+// Read create info from file (saved by create test) - returns array of all model results
 function getCreateInfo() {
     const createFile = path.join(__dirname, '..', 'test-results', 'create-info.json');
     if (fs.existsSync(createFile)) {
         try {
             const content = fs.readFileSync(createFile, 'utf8');
-            return JSON.parse(content);
+            const parsed = JSON.parse(content);
+            // Ensure it's always an array
+            return Array.isArray(parsed) ? parsed : [parsed];
         } catch (e) {
             console.error('Error reading create-info.json:', e.message);
         }
     }
     return null;
+}
+
+// Check if any result has failed status
+function hasAnyFailed(results) {
+    if (!results || !Array.isArray(results)) return false;
+    return results.some(r => r.status === 'FAILED');
 }
 
 // Extract error details from log file
@@ -315,11 +323,41 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         }
     }
 
-    // Add create info (model, collection, minted count) for create test
-    if (createInfo && testFile.includes('create')) {
-        message += `\n\n🤖 <b>Model:</b> ${createInfo.model || 'N/A'}`;
-        message += `\n📦 <b>Collection:</b> ${createInfo.collectionName || 'N/A'}`;
-        message += `\n🎨 <b>Minted:</b> ${createInfo.mintedCount || 0} NFTs`;
+    // Add create info (all models results) for create test
+    if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
+        // Check if any test failed - override status if needed
+        const anyFailed = hasAnyFailed(createInfo);
+        if (anyFailed && status === 'PASSED') {
+            // This shouldn't happen, but just in case
+            console.log('Warning: Some tests failed but overall status was PASSED');
+        }
+
+        message += `\n\n📊 <b>Model Results (${createInfo.length} tests):</b>`;
+
+        createInfo.forEach((result, index) => {
+            const resultEmoji = result.status === 'PASSED' ? '✅' : '❌';
+            message += `\n\n${resultEmoji} <b>${result.model || 'Unknown'}</b>`;
+
+            if (result.status === 'PASSED') {
+                message += `\n   📦 Collection: ${result.collectionName || 'N/A'}`;
+                message += `\n   🎨 Minted: ${result.mintedCount || 0} NFTs`;
+                if (result.collectionUrl) {
+                    message += `\n   🔗 ${result.collectionUrl}`;
+                }
+            } else {
+                message += `\n   ⚠️ Status: FAILED`;
+                if (result.error) {
+                    // Truncate error message if too long
+                    const errorMsg = result.error.length > 200 ? result.error.substring(0, 200) + '...' : result.error;
+                    message += `\n   💬 Error: <code>${errorMsg}</code>`;
+                }
+            }
+        });
+
+        // Summary
+        const passedCount = createInfo.filter(r => r.status === 'PASSED').length;
+        const failedCount = createInfo.filter(r => r.status === 'FAILED').length;
+        message += `\n\n📈 <b>Summary:</b> ${passedCount} passed, ${failedCount} failed`;
     }
 
     // Add URL if exists

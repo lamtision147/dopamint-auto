@@ -3,6 +3,7 @@
 # ========================================
 # Dopamint Playwright Auto Test Runner
 # For AWS CodeBuild / Linux environments
+# Supports parallel execution of spec files
 # ========================================
 
 set -e
@@ -23,43 +24,41 @@ mkdir -p test-results
 # Clean up previous test artifacts
 rm -f test-results/token-urls.json
 rm -f test-results/collection-url.txt
+rm -f test-results/create-info.json
 
 # Track overall exit code
 OVERALL_EXIT_CODE=0
 
-# Function to run a single test
-run_single_test() {
-    local SINGLE_FILE="$1"
-    local SINGLE_NAME="$2"
+# Generate timestamp and log file
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOGFILE="test-results/test-log-${TIMESTAMP}.txt"
 
-    # Generate log file name
-    local TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    local LOGFILE="test-results/test-log-${SINGLE_FILE}-${TIMESTAMP}.txt"
+# Function to run tests and send notification
+run_tests() {
+    local TEST_PATTERN="$1"
+    local TEST_DISPLAY_NAME="$2"
 
     echo ""
     echo "========================================"
-    echo "  Running: $SINGLE_FILE"
+    echo "  Running: $TEST_DISPLAY_NAME"
+    echo "  Pattern: $TEST_PATTERN"
     echo "========================================"
 
     # Log start
     echo "========================================" >> "$LOGFILE"
     echo "Test started at $(date)" >> "$LOGFILE"
-    echo "Test file: $SINGLE_FILE" >> "$LOGFILE"
+    echo "Test pattern: $TEST_PATTERN" >> "$LOGFILE"
     echo "========================================" >> "$LOGFILE"
 
     # Record start time
     START_TIME=$(date +%s)
 
-    echo "Running Playwright test: $SINGLE_FILE..."
+    echo "Running Playwright tests in PARALLEL..."
     echo "Running tests..." >> "$LOGFILE"
 
-    # Run the test
+    # Run all tests in parallel (Playwright handles parallelization)
     local TEST_EXIT_CODE=0
-    if [ "$SINGLE_FILE" = "all" ]; then
-        npx playwright test tests/ --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
-    else
-        npx playwright test "tests/$SINGLE_FILE" --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
-    fi
+    npx playwright test $TEST_PATTERN --reporter=list 2>&1 | tee -a "$LOGFILE" || TEST_EXIT_CODE=$?
 
     # Calculate duration
     END_TIME=$(date +%s)
@@ -71,57 +70,50 @@ run_single_test() {
     local STATUS
     if [ $TEST_EXIT_CODE -eq 0 ]; then
         STATUS="PASSED"
-        echo "[PASSED] $SINGLE_FILE"
+        echo "[PASSED] All tests passed"
     else
         STATUS="FAILED"
         OVERALL_EXIT_CODE=1
-        echo "[FAILED] $SINGLE_FILE"
+        echo "[FAILED] Some tests failed"
     fi
 
     echo "Test finished with status: $STATUS" >> "$LOGFILE"
     echo "Exit code: $TEST_EXIT_CODE" >> "$LOGFILE"
 
     # Send Telegram notification
-    echo "Sending Telegram notification for $SINGLE_FILE..."
-    node scripts/send-telegram.js "$STATUS" "$DURATION" "$SINGLE_NAME" "$SINGLE_FILE" "$LOGFILE" || true
-
-    # Small delay between notifications
-    sleep 2
+    echo "Sending Telegram notification..."
+    node scripts/send-telegram.js "$STATUS" "$DURATION" "$TEST_DISPLAY_NAME" "$TEST_DISPLAY_NAME" "$LOGFILE" || true
 }
 
-# Check if running all tests
+# Build test pattern from TEST_FILE
 if [ "$TEST_FILE" = "all" ]; then
     echo ""
-    echo "Running ALL tests..."
-    run_single_test "all" "All Tests"
+    echo "Running ALL tests in parallel..."
+    run_tests "tests/" "All Tests"
 
 # Check if multiple files (contains comma)
 elif [[ "$TEST_FILE" == *","* ]]; then
     echo ""
-    echo "Multiple files detected, running each separately..."
+    echo "Multiple files detected, running ALL in parallel..."
 
-    # Parse comma-separated files
+    # Parse comma-separated files and build pattern
     IFS=',' read -ra FILES <<< "$TEST_FILE"
-    FILE_INDEX=0
+    TEST_PATTERNS=""
 
     for FILE in "${FILES[@]}"; do
-        FILE_INDEX=$((FILE_INDEX + 1))
         # Remove whitespace
         FILE=$(echo "$FILE" | xargs)
-
-        echo ""
-        echo "----------------------------------------"
-        echo "  [$FILE_INDEX] Running: $FILE"
-        echo "----------------------------------------"
-
-        run_single_test "$FILE" "$FILE"
+        TEST_PATTERNS="$TEST_PATTERNS tests/$FILE"
     done
+
+    echo "Test files: $TEST_PATTERNS"
+    run_tests "$TEST_PATTERNS" "$TEST_FILE"
 
 # Single file mode
 else
     echo ""
-    echo "Running single test: $TEST_FILE"
-    run_single_test "$TEST_FILE" "$TEST_NAME"
+    echo "Running single test file: $TEST_FILE"
+    run_tests "tests/$TEST_FILE" "$TEST_FILE"
 fi
 
 echo ""

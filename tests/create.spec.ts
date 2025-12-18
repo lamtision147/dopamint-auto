@@ -138,15 +138,42 @@ async function runCreateFlowWithModel(
     console.log(`🎨 NFTs minted: ${mintedCount}`);
     console.log('========================================');
 
-    // Save model info to file for Telegram notification
+    // Save model info to file for Telegram notification (accumulate, don't overwrite)
     const createInfoPath = path.resolve(__dirname, '../test-results/create-info.json');
-    const createInfo = {
+
+    // Read existing results or start with empty array
+    let allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string}> = [];
+    try {
+        if (fs.existsSync(createInfoPath)) {
+            const existing = JSON.parse(fs.readFileSync(createInfoPath, 'utf8'));
+            allResults = Array.isArray(existing) ? existing : [existing];
+        }
+    } catch (e) {
+        allResults = [];
+    }
+
+    // Get collection URL
+    const collectionUrlPath = path.resolve(__dirname, '../test-results/collection-url.txt');
+    let collectionUrl = '';
+    try {
+        if (fs.existsSync(collectionUrlPath)) {
+            collectionUrl = fs.readFileSync(collectionUrlPath, 'utf8').trim();
+        }
+    } catch (e) {
+        // Ignore
+    }
+
+    // Add new result
+    allResults.push({
         model: modelUsed,
         collectionName: collectionName,
-        mintedCount: mintedCount
-    };
-    fs.writeFileSync(createInfoPath, JSON.stringify(createInfo, null, 2));
-    console.log('✅ Create info saved to: create-info.json');
+        mintedCount: mintedCount,
+        status: 'PASSED',
+        collectionUrl: collectionUrl
+    });
+
+    fs.writeFileSync(createInfoPath, JSON.stringify(allResults, null, 2));
+    console.log(`✅ Create info saved (${allResults.length} results total)`);
 
     await page.waitForTimeout(5000);
 
@@ -171,14 +198,18 @@ test.describe('Create NFT Flow', () => {
     });
 
     test.afterEach(async ({ context }, testInfo) => {
-        // Only capture debug screenshots on FAILURE
+        // Extract model from test title
+        const modelMatch = testInfo.title.match(/with (.+) model/);
+        const model = modelMatch ? modelMatch[1] : 'Unknown';
+
+        // Save failed result to create-info.json
         if (testInfo.status !== 'passed') {
             console.log('Test FAILED - capturing debug screenshots...');
             const pages = context.pages();
             for (let i = 0; i < pages.length; i++) {
                 try {
                     await pages[i].screenshot({
-                        path: `test-results/FAILED-page-${i}.png`,
+                        path: `test-results/FAILED-${model}-page-${i}.png`,
                         fullPage: true
                     });
                     console.log(`Captured debug screenshot of page ${i}`);
@@ -186,8 +217,33 @@ test.describe('Create NFT Flow', () => {
                     // Page may be closed
                 }
             }
+
+            // Save failed result to accumulate file
+            const createInfoPath = path.resolve(__dirname, '../test-results/create-info.json');
+            let allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; error?: string}> = [];
+            try {
+                if (fs.existsSync(createInfoPath)) {
+                    const existing = JSON.parse(fs.readFileSync(createInfoPath, 'utf8'));
+                    allResults = Array.isArray(existing) ? existing : [existing];
+                }
+            } catch (e) {
+                allResults = [];
+            }
+
+            // Add failed result
+            allResults.push({
+                model: model,
+                collectionName: 'N/A',
+                mintedCount: 0,
+                status: 'FAILED',
+                error: testInfo.error?.message || 'Unknown error'
+            });
+
+            fs.writeFileSync(createInfoPath, JSON.stringify(allResults, null, 2));
+            console.log(`❌ Failed result saved for ${model}`);
         }
-        console.log(`Test "${testInfo.title}" has ended.`);
+
+        console.log(`Test "${testInfo.title}" has ended with status: ${testInfo.status}`);
 
         // Close all pages and context properly
         try {
