@@ -13,12 +13,28 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 // Get output directory (spec-specific or default)
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
+// Map model name to test index for staggered parallel execution
+const MODEL_TO_INDEX: Record<string, number> = {
+    'Nano Banana Pro': 0,
+    'Nano Banana': 1,
+    'ChatGPT': 2
+};
+
 export const test = baseTest.extend<{
     context: BrowserContext;
     wallet: Dappwright;
+    testIndex: number;
 }>({
-    context: async ({}, use) => {
-        const { wallet, context } = await setupMetaMask();
+    // Extract test index from test title
+    testIndex: async ({}, use, testInfo) => {
+        const modelMatch = testInfo.title.match(/with (.+) model/);
+        const model = modelMatch ? modelMatch[1] : 'Nano Banana Pro';
+        const index = MODEL_TO_INDEX[model] ?? 0;
+        await use(index);
+    },
+
+    context: async ({ testIndex }, use) => {
+        const { wallet, context } = await setupMetaMask(testIndex);
         await use(context);
     },
 
@@ -141,22 +157,12 @@ async function runCreateFlowWithModel(
     console.log(`🎨 NFTs minted: ${mintedCount}`);
     console.log('========================================');
 
-    // Save model info to file for Telegram notification (accumulate, don't overwrite)
-    const createInfoPath = path.resolve(outputDir, 'create-info.json');
-
-    // Read existing results or start with empty array
-    let allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string}> = [];
-    try {
-        if (fs.existsSync(createInfoPath)) {
-            const existing = JSON.parse(fs.readFileSync(createInfoPath, 'utf8'));
-            allResults = Array.isArray(existing) ? existing : [existing];
-        }
-    } catch (e) {
-        allResults = [];
-    }
+    // Save model info to separate file to avoid race condition in parallel tests
+    const safeModelName = modelUsed.toLowerCase().replace(/\s+/g, '-');
+    const modelInfoPath = path.resolve(outputDir, `create-info-${safeModelName}.json`);
 
     // Get collection URL
-    const collectionUrlPath = path.resolve(outputDir, 'collection-url.txt');
+    const collectionUrlPath = path.resolve(outputDir, `collection-url-${safeModelName}.txt`);
     let collectionUrl = '';
     try {
         if (fs.existsSync(collectionUrlPath)) {
@@ -166,17 +172,17 @@ async function runCreateFlowWithModel(
         // Ignore
     }
 
-    // Add new result
-    allResults.push({
+    // Write result to model-specific file
+    const result = {
         model: modelUsed,
         collectionName: collectionName,
         mintedCount: mintedCount,
         status: 'PASSED',
         collectionUrl: collectionUrl
-    });
+    };
 
-    fs.writeFileSync(createInfoPath, JSON.stringify(allResults, null, 2));
-    console.log(`✅ Create info saved (${allResults.length} results total)`);
+    fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
+    console.log(`✅ Create info saved to ${modelInfoPath}`);
 
     await page.waitForTimeout(5000);
 
@@ -185,8 +191,8 @@ async function runCreateFlowWithModel(
 
 test.describe('Create NFT Flow', () => {
     // Increase timeout to 10 minutes because image generation can take 3-4 minutes
-    // Tests MUST run sequentially because they share the same MetaMask extension
-    test.describe.configure({ timeout: 600000 });
+    // Run all 3 tests in parallel - each test has its own MetaMask context via fixture
+    test.describe.configure({ timeout: 600000, mode: 'parallel' });
 
     test("Case 1: Create NFT with Nano Banana Pro model", async ({ wallet, page, context }) => {
         await runCreateFlowWithModel('Nano Banana Pro', wallet, page, context);
@@ -221,29 +227,20 @@ test.describe('Create NFT Flow', () => {
                 }
             }
 
-            // Save failed result to accumulate file
-            const createInfoPath = path.resolve(outputDir, 'create-info.json');
-            let allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; error?: string}> = [];
-            try {
-                if (fs.existsSync(createInfoPath)) {
-                    const existing = JSON.parse(fs.readFileSync(createInfoPath, 'utf8'));
-                    allResults = Array.isArray(existing) ? existing : [existing];
-                }
-            } catch (e) {
-                allResults = [];
-            }
+            // Save failed result to model-specific file
+            const safeModelName = model.toLowerCase().replace(/\s+/g, '-');
+            const modelInfoPath = path.resolve(outputDir, `create-info-${safeModelName}.json`);
 
-            // Add failed result
-            allResults.push({
+            const failedResult = {
                 model: model,
                 collectionName: 'N/A',
                 mintedCount: 0,
                 status: 'FAILED',
                 error: testInfo.error?.message || 'Unknown error'
-            });
+            };
 
-            fs.writeFileSync(createInfoPath, JSON.stringify(allResults, null, 2));
-            console.log(`❌ Failed result saved for ${model}`);
+            fs.writeFileSync(modelInfoPath, JSON.stringify(failedResult, null, 2));
+            console.log(`❌ Failed result saved to ${modelInfoPath}`);
         }
 
         console.log(`Test "${testInfo.title}" has ended with status: ${testInfo.status}`);
@@ -262,5 +259,36 @@ test.describe('Create NFT Flow', () => {
 
         // Wait a bit before next test to ensure cleanup
         await new Promise(resolve => setTimeout(resolve, 3000));
+    });
+
+    // Merge all model-specific result files into create-info.json after all tests complete
+    test.afterAll(async () => {
+        console.log('\n========== MERGING TEST RESULTS ==========');
+        const modelFiles = [
+            'create-info-nano-banana-pro.json',
+            'create-info-nano-banana.json',
+            'create-info-chatgpt.json'
+        ];
+
+        const allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string; error?: string}> = [];
+
+        for (const file of modelFiles) {
+            const filePath = path.resolve(outputDir, file);
+            try {
+                if (fs.existsSync(filePath)) {
+                    const result = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                    allResults.push(result);
+                    console.log(`✅ Loaded result from ${file}`);
+                }
+            } catch (e) {
+                console.log(`⚠️ Could not read ${file}`);
+            }
+        }
+
+        if (allResults.length > 0) {
+            const mergedPath = path.resolve(outputDir, 'create-info.json');
+            fs.writeFileSync(mergedPath, JSON.stringify(allResults, null, 2));
+            console.log(`✅ Merged ${allResults.length} results into create-info.json`);
+        }
     });
 });

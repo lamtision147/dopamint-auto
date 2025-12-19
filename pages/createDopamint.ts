@@ -735,10 +735,11 @@ export class DopamintCreatePage {
         await newPage.screenshot({ path: `${outputDir}/collection-page.png` });
         console.log('✅ Screenshot of collection page saved!');
 
-        // Save collection URL to file for Telegram notification
+        // Save collection URL to model-specific file to avoid race condition in parallel tests
         const collectionUrl = newPage.url();
         const fs = await import('fs');
-        fs.writeFileSync(`${outputDir}/collection-url.txt`, collectionUrl);
+        const safeModelName = this.selectedModel.toLowerCase().replace(/\s+/g, '-');
+        fs.writeFileSync(`${outputDir}/collection-url-${safeModelName}.txt`, collectionUrl);
         console.log(`✅ Collection URL saved: ${collectionUrl}`);
 
         // Return the new page for further actions
