@@ -408,26 +408,48 @@ ${emoji} <b>DOPAMINT AUTO TEST</b>
         message += `\n\n📈 <b>Summary:</b> ${passedCount} passed, ${failedCount} failed`;
     }
 
-    // Add URL if exists (skip for create test since each model already has its URL)
-    if (collectionUrl && !testFile.includes('create')) {
+    // Add URL if exists (skip for create and searchMintSell tests since each model/collection already has its URL)
+    if (collectionUrl && !testFile.includes('create') && !testFile.includes('searchMintSell')) {
         message += `\n\n🔗 Collection: ${collectionUrl}`;
     }
 
     // Add minted/sold token URLs for searchMintSell test
     if (tokenUrls && testFile.includes('searchMintSell')) {
-        message += `\n\n🎨 <b>Collection:</b> ${tokenUrls.collectionName || 'N/A'}`;
-        message += `\n🔢 <b>Minted:</b> ${tokenUrls.mintCount || 0} NFTs`;
+        // Handle both array format (new) and single object format (legacy)
+        const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
 
-        if (tokenUrls.mintedUrls && tokenUrls.mintedUrls.length > 0) {
-            message += `\n\n🖼 <b>Minted NFT URLs:</b>`;
-            tokenUrls.mintedUrls.forEach((url, index) => {
-                message += `\n${index + 1}. ${url}`;
-            });
-        }
+        message += `\n\n📊 <b>Collection Results (${resultsArray.length} tests):</b>`;
 
-        if (tokenUrls.soldUrl) {
-            message += `\n\n💰 <b>Sold NFT URL:</b>\n${tokenUrls.soldUrl}`;
-        }
+        resultsArray.forEach((result, index) => {
+            const resultEmoji = result.status === 'PASSED' ? '✅' : '❌';
+            message += `\n\n${resultEmoji} <b>${result.collectionName || 'Unknown'}</b>`;
+
+            if (result.status === 'PASSED') {
+                message += `\n   🔢 Minted: ${result.mintCount || 0} NFTs`;
+
+                if (result.mintedUrls && result.mintedUrls.length > 0) {
+                    message += `\n   🖼 Minted URLs:`;
+                    result.mintedUrls.forEach((url, i) => {
+                        message += `\n      ${i + 1}. ${url}`;
+                    });
+                }
+
+                if (result.soldUrl) {
+                    message += `\n   💰 Sold: ${result.soldUrl}`;
+                }
+            } else {
+                message += `\n   ⚠️ Status: FAILED`;
+                if (result.error) {
+                    const errorMsg = result.error.length > 200 ? result.error.substring(0, 200) + '...' : result.error;
+                    message += `\n   💬 Error: <code>${errorMsg}</code>`;
+                }
+            }
+        });
+
+        // Summary
+        const passedCount = resultsArray.filter(r => r.status === 'PASSED').length;
+        const failedCount = resultsArray.filter(r => r.status === 'FAILED').length;
+        message += `\n\n📈 <b>Summary:</b> ${passedCount} passed, ${failedCount} failed`;
     }
 
     message += `\n\n🤖 Automated by Playwright`;
