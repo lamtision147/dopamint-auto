@@ -184,7 +184,7 @@ async function runCreateFlowWithModel(
 }
 
 // Delay between test starts (seconds) - to avoid MetaMask conflicts
-const STAGGER_DELAY_SECONDS = 20;
+const STAGGER_DELAY_SECONDS = 30;
 
 test.describe('Create NFT Flow', () => {
     // Increase timeout to 10 minutes because image generation can take 3-4 minutes
