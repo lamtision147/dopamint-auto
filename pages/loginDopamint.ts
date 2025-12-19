@@ -327,12 +327,12 @@ export class DopamintLoginPage {
 
         console.log('Waiting for page to update after wallet connection...');
 
-        // Wait longer and retry multiple times for UI to update
-        const maxRetries = 5;
-        const retryDelay = 3000; // 3 seconds between retries
+        // Phase 1: Quick check with page reload
+        const quickRetries = 3;
+        const retryDelay = 3000;
 
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            console.log(`Attempt ${attempt}/${maxRetries}: Checking login button visibility...`);
+        for (let attempt = 1; attempt <= quickRetries; attempt++) {
+            console.log(`Attempt ${attempt}/${quickRetries}: Checking login button visibility...`);
 
             await dappPage.waitForTimeout(retryDelay);
 
@@ -346,16 +346,44 @@ export class DopamintLoginPage {
                 return;
             }
 
-            console.log(`Login button still visible, attempt ${attempt}/${maxRetries}`);
+            console.log(`Login button still visible, attempt ${attempt}/${quickRetries}`);
 
-            // Try refreshing the page on last few attempts
-            if (attempt >= 3) {
+            // Try refreshing the page
+            if (attempt >= 2) {
                 console.log('Trying page reload to refresh wallet state...');
                 await dappPage.reload({ waitUntil: 'networkidle' });
                 await dappPage.waitForTimeout(2000);
-
-                // Close any popups that might appear after reload
                 await this.closeAllPopups();
+            }
+        }
+
+        // Phase 2: Retry full MetaMask connection flow
+        const fullRetries = 2;
+        for (let fullAttempt = 1; fullAttempt <= fullRetries; fullAttempt++) {
+            console.log(`\n🔄 RETRY ${fullAttempt}/${fullRetries}: Re-attempting full MetaMask connection flow...`);
+
+            try {
+                // Close any popups first
+                await this.closeAllPopups();
+
+                // Re-run the full login flow
+                await this.loginWithMetaMask();
+
+                // Check if login button is now hidden
+                await dappPage.waitForTimeout(3000);
+                const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
+                const isLoginVisible = await loginButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+                if (!isLoginVisible) {
+                    console.log('✅ Verification successful after retry: Login button is NOT visible!');
+                    await expect(loginButton).not.toBeVisible({ timeout: 5000 });
+                    console.log('✅ Test assertion passed: Login button is NOT visible!');
+                    return;
+                }
+
+                console.log(`Login button still visible after full retry ${fullAttempt}/${fullRetries}`);
+            } catch (error) {
+                console.log(`⚠️ Full retry ${fullAttempt} failed: ${error}`);
             }
         }
 
@@ -364,6 +392,6 @@ export class DopamintLoginPage {
         await dappPage.screenshot({ path: `${outputDir}/login-button-still-visible.png` });
         console.log('❌ Screenshot saved: login-button-still-visible.png');
 
-        throw new Error('Login button still visible after wallet connection (after multiple retries)');
+        throw new Error('Login button still visible after wallet connection (after multiple retries including full reconnection)');
     }
 }
