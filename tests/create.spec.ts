@@ -183,30 +183,20 @@ async function runCreateFlowWithModel(
     return { collectionName, mintedCount, modelUsed };
 }
 
-// Delay between test starts (seconds) - to avoid MetaMask conflicts
-const STAGGER_DELAY_SECONDS = 30;
-
 test.describe('Create NFT Flow', () => {
     // Increase timeout to 10 minutes because image generation can take 3-4 minutes
-    // Tests run in parallel with staggered start times
-    test.describe.configure({ timeout: 600000, mode: 'parallel' });
+    // Tests MUST run sequentially because they share the same MetaMask extension
+    test.describe.configure({ timeout: 600000 });
 
     test("Case 1: Create NFT with Nano Banana Pro model", async ({ wallet, page, context }) => {
-        // First test starts immediately (no delay)
         await runCreateFlowWithModel('Nano Banana Pro', wallet, page, context);
     });
 
     test("Case 2: Create NFT with Nano Banana model", async ({ wallet, page, context }) => {
-        // Second test waits 20 seconds
-        console.log(`Waiting ${STAGGER_DELAY_SECONDS}s before starting (staggered parallel)...`);
-        await page.waitForTimeout(STAGGER_DELAY_SECONDS * 1000);
         await runCreateFlowWithModel('Nano Banana', wallet, page, context);
     });
 
     test("Case 3: Create NFT with ChatGPT model", async ({ wallet, page, context }) => {
-        // Third test waits 40 seconds
-        console.log(`Waiting ${STAGGER_DELAY_SECONDS * 2}s before starting (staggered parallel)...`);
-        await page.waitForTimeout(STAGGER_DELAY_SECONDS * 2 * 1000);
         await runCreateFlowWithModel('ChatGPT', wallet, page, context);
     });
 
