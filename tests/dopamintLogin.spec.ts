@@ -1,5 +1,5 @@
 import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask } from '../dapp/metamaskSetup';
+import { setupMetaMask, TEST_FILE_OFFSETS } from '../dapp/metamaskSetup';
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
 import fs from 'fs'; // Import module file system
@@ -21,7 +21,8 @@ export const test = baseTest.extend<{
   wallet: Dappwright;
 }>({
   context: async ({}, use) => {
-    const { wallet, context } = await setupMetaMask();
+    // Use LOGIN file offset (0) for staggered parallel execution across all test files
+    const { wallet, context } = await setupMetaMask(0, TEST_FILE_OFFSETS.LOGIN);
     await use(context);
   },
 

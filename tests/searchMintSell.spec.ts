@@ -1,5 +1,5 @@
 import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask } from '../dapp/metamaskSetup';
+import { setupMetaMask, TEST_FILE_OFFSETS } from '../dapp/metamaskSetup';
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import { SearchMintSellPage } from '../pages/searchMintSellDopamint';
 import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
@@ -37,7 +37,8 @@ export const test = baseTest.extend<{
     },
 
     context: async ({ testIndex }, use) => {
-        const { wallet, context } = await setupMetaMask(testIndex);
+        // Use SEARCH_MINT_SELL file offset for staggered parallel execution across all test files
+        const { wallet, context } = await setupMetaMask(testIndex, TEST_FILE_OFFSETS.SEARCH_MINT_SELL);
         await use(context);
     },
 

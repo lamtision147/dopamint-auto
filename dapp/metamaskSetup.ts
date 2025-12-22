@@ -9,12 +9,25 @@ const BASE_SEPOLIA_RPC_ENDPOINTS = [
   "https://base-sepolia.blockpi.network/v1/rpc/public"
 ];
 
-export async function setupMetaMask(testIndex: number = 0) {
-  // Staggered delay to avoid MetaMask connection conflicts in parallel tests
-  const delayMs = testIndex * 30000; // 0s, 30s, 60s for each test
+// File offsets for parallel test execution across multiple test files
+// Each file has a unique offset to avoid MetaMask conflicts
+export const TEST_FILE_OFFSETS = {
+  LOGIN: 0,           // dopamintLogin.spec.ts: 1 test, starts at 0s
+  CREATE: 1,          // create.spec.ts: 3 tests, starts at 30s (30s, 60s, 90s)
+  SEARCH_MINT_SELL: 4 // searchMintSell.spec.ts: 3 tests, starts at 120s (120s, 150s, 180s)
+};
+
+// Delay between each test in milliseconds
+const DELAY_PER_TEST = 30000; // 30 seconds
+
+export async function setupMetaMask(testIndex: number = 0, fileOffset: number = 0) {
+  // Global test index = fileOffset + testIndex
+  // This ensures unique delays across all test files when running in parallel
+  const globalIndex = fileOffset + testIndex;
+  const delayMs = globalIndex * DELAY_PER_TEST;
 
   if (delayMs > 0) {
-    console.log(`⏳ Waiting ${delayMs / 1000}s before MetaMask bootstrap to avoid conflicts...`);
+    console.log(`⏳ [File offset: ${fileOffset}, Test index: ${testIndex}] Waiting ${delayMs / 1000}s before MetaMask bootstrap...`);
     await new Promise(resolve => setTimeout(resolve, delayMs));
   }
 

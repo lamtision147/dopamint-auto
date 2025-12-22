@@ -2,12 +2,13 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false, // Tests within each file run serially (unless describe.configure overrides)
+  testIgnore: ['**/example.spec.ts'], // Ignore example test file
+  fullyParallel: true, // Enable full parallel execution across all test files
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 3, // 3 workers to run create.spec.ts tests in parallel
+  workers: 7, // 7 workers to run all tests in parallel (1 login + 3 create + 3 searchMintSell)
   reporter: [['list'], ['html', { open: 'never' }]],
-  timeout: 180000, // 3 minutes global timeout
+  timeout: 600000, // 10 minutes global timeout (increased for parallel execution with delays)
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
