@@ -35,7 +35,7 @@ export class DopamintLoginPage {
         const dappPage = this.page;
 
         await dappPage.goto(this.baseUrl);
-        await dappPage.waitForTimeout(3000);
+        await dappPage.waitForTimeout(2000);
 
         // Login if redirected to auth page
         if (dappPage.url().includes('amazoncognito.com/login')) {
@@ -64,13 +64,13 @@ export class DopamintLoginPage {
 
         // Handle popup 1: Terms of Service
         const termsPopupButton = dappPage.locator(DOPAMINT_SELECTORS.TERMS_POPUP_BUTTON);
-        if (await termsPopupButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await termsPopupButton.isVisible({ timeout: 2000 }).catch(() => false)) {
             console.log('Closing Terms of Service popup...');
             await termsPopupButton.click();
-            await dappPage.waitForTimeout(1000);
+            await dappPage.waitForTimeout(500);
         }
 
-        await dappPage.waitForTimeout(2000);
+        await dappPage.waitForTimeout(1000);
 
         // Handle popup 2: Close any dialog with X button
         for (const selector of DOPAMINT_SELECTORS.CLOSE_DIALOG_BUTTONS) {
@@ -78,14 +78,14 @@ export class DopamintLoginPage {
             if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
                 console.log(`Closing popup with selector: ${selector}`);
                 await closeBtn.click({ force: true });
-                await dappPage.waitForTimeout(1000);
+                await dappPage.waitForTimeout(500);
                 break;
             }
         }
 
         // If overlay still exists, press Escape
         await dappPage.keyboard.press('Escape');
-        await dappPage.waitForTimeout(500);
+        await dappPage.waitForTimeout(300);
 
         console.log('✅ All popups closed!');
     }
@@ -106,7 +106,7 @@ export class DopamintLoginPage {
 
         console.log('Clicking Login button...');
         await loginButton.click();
-        await dappPage.waitForTimeout(2000);
+        await dappPage.waitForTimeout(1500);
 
         // Click "Sign in with wallet" button
         const signInWithWalletButton = dappPage.locator(DOPAMINT_SELECTORS.SIGN_IN_WITH_WALLET);
@@ -116,7 +116,7 @@ export class DopamintLoginPage {
 
         console.log('Clicking Sign in with wallet...');
         await signInWithWalletButton.click();
-        await dappPage.waitForTimeout(3000);
+        await dappPage.waitForTimeout(2000);
 
         // Select MetaMask option
         const metamaskOption = dappPage.locator(DOPAMINT_SELECTORS.METAMASK_OPTION).first();
@@ -131,7 +131,7 @@ export class DopamintLoginPage {
         console.log('Waiting for MetaMask Connect popup...');
 
         // Wait for MetaMask popup to appear
-        await dappPage.waitForTimeout(3000);
+        await dappPage.waitForTimeout(2000);
 
         // Helper function to find MetaMask popup
         const findMetaMaskPopup = async (): Promise<Page | null> => {
@@ -238,7 +238,7 @@ export class DopamintLoginPage {
                 console.log('✅ Clicked first button, waiting for next step...');
 
                 try {
-                    await metamaskPopup.waitForTimeout(2000);
+                    await metamaskPopup.waitForTimeout(1500);
 
                     // Check if popup is still open for second confirmation
                     if (!metamaskPopup.isClosed()) {
@@ -261,7 +261,7 @@ export class DopamintLoginPage {
             // Wait a bit, but handle if popup is closed
             try {
                 if (!metamaskPopup.isClosed()) {
-                    await metamaskPopup.waitForTimeout(2000);
+                    await metamaskPopup.waitForTimeout(1500);
                 }
             } catch (e) {
                 // Popup closed, continue
@@ -279,7 +279,7 @@ export class DopamintLoginPage {
 
         // STEP 2: Check if additional Sign popup appears (may not be needed if signature was in STEP 1)
         console.log('\n=== METAMASK STEP 2: Check for additional Sign popup ===');
-        await dappPage.waitForTimeout(2000);
+        await dappPage.waitForTimeout(1500);
 
         // Check if there's another popup (signature might be separate)
         let signPopup = await findMetaMaskPopup();
@@ -288,7 +288,7 @@ export class DopamintLoginPage {
             console.log('Found additional Sign popup!');
             await signPopup.waitForLoadState();
             await signPopup.bringToFront();
-            await signPopup.waitForTimeout(1000);
+            await signPopup.waitForTimeout(500);
 
             // Scroll down to enable Sign button
             console.log('Scrolling down...');
@@ -300,7 +300,7 @@ export class DopamintLoginPage {
                 // Ignore scroll errors
             }
 
-            await signPopup.waitForTimeout(500);
+            await signPopup.waitForTimeout(300);
 
             // Try to click Sign/Confirm button
             const signButtons = ['Sign', 'Ký', 'Confirm', 'Xác nhận', 'Approve', 'Chấp nhận'];
@@ -329,7 +329,7 @@ export class DopamintLoginPage {
 
         // Phase 1: Quick check with page reload
         const quickRetries = 3;
-        const retryDelay = 3000;
+        const retryDelay = 2000;
 
         for (let attempt = 1; attempt <= quickRetries; attempt++) {
             console.log(`Attempt ${attempt}/${quickRetries}: Checking login button visibility...`);
@@ -352,7 +352,7 @@ export class DopamintLoginPage {
             if (attempt >= 2) {
                 console.log('Trying page reload to refresh wallet state...');
                 await dappPage.reload({ waitUntil: 'networkidle' });
-                await dappPage.waitForTimeout(2000);
+                await dappPage.waitForTimeout(1500);
                 await this.closeAllPopups();
             }
         }
@@ -370,7 +370,7 @@ export class DopamintLoginPage {
                 await this.loginWithMetaMask();
 
                 // Check if login button is now hidden
-                await dappPage.waitForTimeout(3000);
+                await dappPage.waitForTimeout(2000);
                 const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
                 const isLoginVisible = await loginButton.isVisible({ timeout: 2000 }).catch(() => false);
 

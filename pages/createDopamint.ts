@@ -53,18 +53,18 @@ export class DopamintCreatePage {
         const createButton = this.page.locator(CREATE_SELECTORS.CREATE_BUTTON).first();
         await expect(createButton).toBeVisible({ timeout: 10000 });
         await createButton.click();
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         console.log('✅ Clicked Create button!');
 
         // Handle tutorial popup if appears
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(500);
         for (const selector of CREATE_SELECTORS.TUTORIAL_BUTTON) {
             const closeBtn = this.page.locator(selector).first();
-            if (await closeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            if (await closeBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
                 console.log(`Closing popup with selector: ${selector}`);
                 await closeBtn.click({ force: true });
-                await this.page.waitForTimeout(1000);
+                await this.page.waitForTimeout(500);
                 break;
             }
         }
@@ -73,7 +73,7 @@ export class DopamintCreatePage {
     async chooseChangeButtonTemplate(): Promise<void> {
         console.log('\n=== Select Change button template ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Try to find element from selectors list
         const changeButtonTemplate = await this.findElementFromSelectors(
@@ -83,7 +83,7 @@ export class DopamintCreatePage {
 
         if (changeButtonTemplate) {
             await changeButtonTemplate.click();
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(1000);
             console.log('✅ Selected Change button template!');
         } else {
             // Fallback: Try click based on text
@@ -91,7 +91,7 @@ export class DopamintCreatePage {
             const textElement = this.page.getByText('Change', { exact: false }).first();
             if (await textElement.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await textElement.click();
-                await this.page.waitForTimeout(2000);
+                await this.page.waitForTimeout(1000);
                 console.log('✅ Clicked by text "Change"!');
             } else {
                 throw new Error('Change button template not found');
@@ -102,7 +102,7 @@ export class DopamintCreatePage {
     async selectMotorbikeCard(): Promise<void> {
         console.log('\n=== Select Motorbike card ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         const motorbikeCard = await this.findElementFromSelectors(
             CREATE_SELECTORS.MOTORBIKE_CARD,
@@ -111,17 +111,44 @@ export class DopamintCreatePage {
 
         if (motorbikeCard) {
             await motorbikeCard.click();
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(1000);
             console.log('✅ Selected Motorbike card!');
         } else {
             // Fallback
             const textElement = this.page.getByText('Motorbike', { exact: false }).first();
             if (await textElement.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await textElement.click();
-                await this.page.waitForTimeout(2000);
+                await this.page.waitForTimeout(1000);
                 console.log('✅ Clicked by text "Motorbike"!');
             } else {
                 throw new Error('Motorbike card not found');
+            }
+        }
+    }
+
+    async selectStudioCard(): Promise<void> {
+        console.log('\n=== Select Studio card ===');
+
+        await this.page.waitForTimeout(1000);
+
+        const studioCard = await this.findElementFromSelectors(
+            CREATE_SELECTORS.STUDIO_CARD,
+            10000
+        );
+
+        if (studioCard) {
+            await studioCard.click();
+            await this.page.waitForTimeout(1000);
+            console.log('✅ Selected Studio card!');
+        } else {
+            // Fallback
+            const textElement = this.page.getByText('Studio', { exact: false }).first();
+            if (await textElement.isVisible({ timeout: 5000 }).catch(() => false)) {
+                await textElement.click();
+                await this.page.waitForTimeout(1000);
+                console.log('✅ Clicked by text "Studio"!');
+            } else {
+                throw new Error('Studio card not found');
             }
         }
     }
@@ -135,13 +162,13 @@ export class DopamintCreatePage {
 
         if (modelSelect) {
             await modelSelect.click();
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(500);
         } else {
             // Fallback
             const selectText = this.page.getByText('Select model', { exact: false }).first();
             if (await selectText.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await selectText.click();
-                await this.page.waitForTimeout(1000);
+                await this.page.waitForTimeout(500);
             }
         }
     }
@@ -149,13 +176,13 @@ export class DopamintCreatePage {
     async selectNanoBananaPro(): Promise<void> {
         console.log('\n=== Select Nano Banana Pro model ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Open dropdown
         await this.openModelDropdown();
 
         // Select Nano Banana Pro option
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(500);
         const nanoBananaOption = await this.findElementFromSelectors(
             CREATE_SELECTORS.NANO_BANANA_PRO_OPTION,
             5000
@@ -163,7 +190,7 @@ export class DopamintCreatePage {
 
         if (nanoBananaOption) {
             await nanoBananaOption.click();
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(500);
             this.selectedModel = 'Nano Banana Pro';
             console.log('✅ Selected Nano Banana Pro model!');
         } else {
@@ -171,7 +198,7 @@ export class DopamintCreatePage {
             const optionText = this.page.getByText('Nano Banana Pro', { exact: false }).first();
             if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await optionText.click();
-                await this.page.waitForTimeout(1000);
+                await this.page.waitForTimeout(500);
                 this.selectedModel = 'Nano Banana Pro';
                 console.log('✅ Clicked by text "Nano Banana Pro"!');
             } else {
@@ -183,13 +210,13 @@ export class DopamintCreatePage {
     async selectNanoBanana(): Promise<void> {
         console.log('\n=== Select Nano Banana model ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Open dropdown
         await this.openModelDropdown();
 
         // Select Nano Banana option
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(500);
         const nanoBananaOption = await this.findElementFromSelectors(
             CREATE_SELECTORS.NANO_BANANA_OPTION,
             5000
@@ -197,7 +224,7 @@ export class DopamintCreatePage {
 
         if (nanoBananaOption) {
             await nanoBananaOption.click();
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(500);
             this.selectedModel = 'Nano Banana';
             console.log('✅ Selected Nano Banana model!');
         } else {
@@ -205,7 +232,7 @@ export class DopamintCreatePage {
             const optionText = this.page.locator('[role="option"]:has-text("Nano Banana"):not(:has-text("Pro"))').first();
             if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await optionText.click();
-                await this.page.waitForTimeout(1000);
+                await this.page.waitForTimeout(500);
                 this.selectedModel = 'Nano Banana';
                 console.log('✅ Clicked Nano Banana option!');
             } else {
@@ -213,7 +240,7 @@ export class DopamintCreatePage {
                 const exactOption = this.page.getByText('Nano Banana', { exact: true }).first();
                 if (await exactOption.isVisible({ timeout: 3000 }).catch(() => false)) {
                     await exactOption.click();
-                    await this.page.waitForTimeout(1000);
+                    await this.page.waitForTimeout(500);
                     this.selectedModel = 'Nano Banana';
                     console.log('✅ Selected Nano Banana (exact match)!');
                 } else {
@@ -226,13 +253,13 @@ export class DopamintCreatePage {
     async selectChatGPT(): Promise<void> {
         console.log('\n=== Select ChatGPT model ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Open dropdown
         await this.openModelDropdown();
 
         // Select ChatGPT option
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(500);
         const chatgptOption = await this.findElementFromSelectors(
             CREATE_SELECTORS.CHATGPT_OPTION,
             5000
@@ -240,7 +267,7 @@ export class DopamintCreatePage {
 
         if (chatgptOption) {
             await chatgptOption.click();
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(500);
             this.selectedModel = 'ChatGPT';
             console.log('✅ Selected ChatGPT model!');
         } else {
@@ -248,7 +275,7 @@ export class DopamintCreatePage {
             const optionText = this.page.getByText('ChatGPT', { exact: false }).first();
             if (await optionText.isVisible({ timeout: 5000 }).catch(() => false)) {
                 await optionText.click();
-                await this.page.waitForTimeout(1000);
+                await this.page.waitForTimeout(500);
                 this.selectedModel = 'ChatGPT';
                 console.log('✅ Clicked by text "ChatGPT"!');
             } else {
@@ -277,7 +304,7 @@ export class DopamintCreatePage {
     async uploadImage(imagePath: string): Promise<void> {
         console.log('\n=== Upload image (Create Flow) ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
         const absolutePath = path.resolve(imagePath);
 
         // Debug: Find all file inputs on page
@@ -388,11 +415,11 @@ export class DopamintCreatePage {
                 node.dispatchEvent(new Event('change', { bubbles: true }));
                 node.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            await this.page.waitForTimeout(3000);
+            await this.page.waitForTimeout(2000);
         }
 
-        // Additional 2 second delay to ensure UI stability
-        await this.page.waitForTimeout(2000);
+        // Additional 1 second delay to ensure UI stability
+        await this.page.waitForTimeout(1000);
 
         console.log('✅ Image upload completed!');
     }
@@ -414,7 +441,7 @@ export class DopamintCreatePage {
     async clickGenerateAndConfirm(): Promise<void> {
         console.log('\n=== Click Generate button and confirm ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Debug: List all buttons with text "Generate"
         const allGenerateBtns = this.page.locator('button:has-text("Generate")');
@@ -482,14 +509,14 @@ export class DopamintCreatePage {
             await this.page.screenshot({ path: `${outputDir}/generate-button-not-found.png` });
         }
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Confirm in popup (if exists)
         console.log('Looking for confirmation popup...');
 
         // Check if dialog appeared
         const dialog = this.page.locator('div[role="dialog"], [data-state="open"]').first();
-        if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await dialog.isVisible({ timeout: 2000 }).catch(() => false)) {
             console.log('Popup appeared');
 
             // Find Generate/Confirm button in dialog
@@ -502,7 +529,7 @@ export class DopamintCreatePage {
 
             for (const selector of dialogBtnSelectors) {
                 const btn = this.page.locator(selector).first();
-                if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                if (await btn.isVisible({ timeout: 1500 }).catch(() => false)) {
                     await btn.click();
                     console.log(`✅ Confirmed with: ${selector}`);
                     break;
@@ -556,13 +583,13 @@ export class DopamintCreatePage {
             await textBtn.click();
         }
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
     }
 
     async fillPublishCollectionForm(): Promise<string> {
         console.log('\n=== Fill Publish Collection form ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Generate collection name with timestamp
         const timestampCode = this.generateTimestampCode();
@@ -619,7 +646,7 @@ export class DopamintCreatePage {
     async clickPublishAndConfirm(): Promise<void> {
         console.log('\n=== Click Publish and confirm ===');
 
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(500);
 
         // Click Publish button
         const publishBtn = await this.findElementFromSelectors(
@@ -635,7 +662,7 @@ export class DopamintCreatePage {
             await textBtn.click();
         }
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1500);
 
         // Confirm publish in popup
         console.log('Looking for confirm popup...');
@@ -690,7 +717,7 @@ export class DopamintCreatePage {
     async clickGoToCollectionAndVerify(expectedCollectionName: string): Promise<Page> {
         console.log('\n=== Click Go to collection and verify ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         // Click Go to collection button
         const goToBtn = await this.findElementFromSelectors(
@@ -713,7 +740,7 @@ export class DopamintCreatePage {
         console.log('Waiting for new tab to open...');
         const newPage = await newPagePromise;
         await newPage.waitForLoadState('networkidle');
-        await newPage.waitForTimeout(3000);
+        await newPage.waitForTimeout(2000);
 
         // Verify collection name in new tab
         console.log(`Verifying collection name: ${expectedCollectionName}`);
@@ -751,13 +778,13 @@ export class DopamintCreatePage {
     async clickMintThis(collectionPage: Page): Promise<void> {
         console.log('\n=== Click Mint this button ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
 
         // Find and click Mint this button
         let clicked = false;
         for (const selector of CREATE_SELECTORS.MINT_THIS_BUTTON) {
             const btn = collectionPage.locator(selector).first();
-            if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await btn.click();
                 console.log(`Clicked Mint this with selector: ${selector}`);
                 clicked = true;
@@ -771,7 +798,7 @@ export class DopamintCreatePage {
             await textBtn.click();
         }
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
         console.log('✅ Mint UI opened!');
     }
 
@@ -779,7 +806,7 @@ export class DopamintCreatePage {
     async uploadMintImage(collectionPage: Page, imagePath: string, imageNumber: number = 1): Promise<void> {
         console.log(`\n=== Upload image ${imageNumber} for Mint ===`);
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
         const absolutePath = path.resolve(imagePath);
 
         // Debug: Log all file inputs in modal
@@ -894,8 +921,8 @@ export class DopamintCreatePage {
             console.log(`File input has file: ${hasFile}`);
         }
 
-        // 2 second delay for UI stability
-        await collectionPage.waitForTimeout(2000);
+        // 1 second delay for UI stability
+        await collectionPage.waitForTimeout(1000);
 
         console.log(`✅ Image ${imageNumber} upload completed!`);
     }
@@ -903,7 +930,7 @@ export class DopamintCreatePage {
     async clickAddNFT(collectionPage: Page): Promise<void> {
         console.log('\n=== Click + Add button to add NFT ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
 
         // Debug: List all buttons on page
         const allButtons = collectionPage.locator('button');
@@ -977,7 +1004,7 @@ export class DopamintCreatePage {
         if (!clicked) {
             console.log('⚠️ Could not find + Add button, slot may already exist');
         } else {
-            await collectionPage.waitForTimeout(2000);
+            await collectionPage.waitForTimeout(1500);
             console.log('✅ New NFT slot added!');
         }
     }
@@ -985,7 +1012,7 @@ export class DopamintCreatePage {
     async clickMintAndGenerate(collectionPage: Page): Promise<void> {
         console.log('\n=== Click Mint and Generate buttons ===');
 
-        await collectionPage.waitForTimeout(1000);
+        await collectionPage.waitForTimeout(500);
 
         // Click Mint button
         let mintClicked = false;
@@ -1005,7 +1032,7 @@ export class DopamintCreatePage {
             await mintBtn.click();
         }
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Click Generate in popup
         console.log('Looking for popup and clicking Generate...');
@@ -1073,7 +1100,7 @@ export class DopamintCreatePage {
 
     async closeSuccessPopup(collectionPage: Page): Promise<void> {
         console.log('\n=== Close Success popup ===');
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
 
         let closed = false;
 

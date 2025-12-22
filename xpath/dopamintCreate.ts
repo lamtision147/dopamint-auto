@@ -33,6 +33,15 @@ export const CREATE_SELECTORS = {
         'text=Motorbike',
     ],
 
+    // Card Selection - Studio
+    STUDIO_CARD: [
+        '[class*="card"]:has-text("Studio")',
+        'div[class*="template"]:has-text("Studio")',
+        'button:has-text("Studio")',
+        '[data-card="studio"]',
+        'text=Studio',
+    ],
+
     // Model Selection dropdown
     MODEL_SELECT: [
         'button:has-text("Select model")',

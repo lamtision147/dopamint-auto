@@ -71,8 +71,8 @@ async function runCreateFlowWithModel(
     // Select Change button template
     await createPage.chooseChangeButtonTemplate();
 
-    // Select Motorbike card
-    await createPage.selectMotorbikeCard();
+    // Select Studio card
+    await createPage.selectStudioCard();
 
     // Select the specified model
     await createPage.selectModel(model);
@@ -184,7 +184,7 @@ async function runCreateFlowWithModel(
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
     console.log(`✅ Create info saved to ${modelInfoPath}`);
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(3000);
 
     return { collectionName, mintedCount, modelUsed };
 }
@@ -258,7 +258,7 @@ test.describe('Create NFT Flow', () => {
         }
 
         // Wait a bit before next test to ensure cleanup
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
     });
 
     // Merge all model-specific result files into create-info.json after all tests complete

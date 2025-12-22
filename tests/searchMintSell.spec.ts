@@ -204,7 +204,7 @@ async function runSearchMintSellFlow(
     fs.writeFileSync(tokenInfoPath, JSON.stringify(tokenInfo, null, 2));
     console.log(`✅ Token URLs saved to: token-urls-${safeCollectionName}.json`);
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(3000);
 
     return {
         collectionName,
@@ -282,7 +282,7 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         }
 
         // Wait a bit before next test to ensure cleanup
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
     });
 
     // Merge all collection-specific result files into token-urls.json after all tests complete

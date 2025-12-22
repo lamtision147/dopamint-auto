@@ -44,7 +44,7 @@ export class SearchMintSellPage {
     async clickSearchButton(): Promise<void> {
         console.log('\n=== Click Search button on header ===');
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         let searchClicked = false;
 
@@ -132,7 +132,7 @@ export class SearchMintSellPage {
             }
         }
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1000);
 
         if (searchClicked) {
             console.log('Search button clicked successfully!');
@@ -144,7 +144,7 @@ export class SearchMintSellPage {
     async searchAndSelectCollection(searchText: string): Promise<Page> {
         console.log(`\n=== Search for "${searchText}" and select ===`);
 
-        await this.page.waitForTimeout(1000);
+        await this.page.waitForTimeout(500);
 
         // Find and fill search input
         let searchInput: Locator | null = null;
@@ -176,7 +176,7 @@ export class SearchMintSellPage {
 
         // Wait for dropdown/search results to appear
         console.log('Waiting for search results dropdown...');
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(2000);
 
         // Screenshot search results dropdown BEFORE clicking
         await this.page.screenshot({ path: `${outputDir}/search-result.png` });
@@ -254,7 +254,7 @@ export class SearchMintSellPage {
                     }
 
                     if (resultClicked) {
-                        await this.page.waitForTimeout(2000);
+                        await this.page.waitForTimeout(1500);
                         break;
                     }
                 }
@@ -328,7 +328,7 @@ export class SearchMintSellPage {
             resultClicked = true; // Assume it worked
         }
 
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(2000);
 
         // Check if new page opened or we navigated on same page
         const newPage = await newPagePromise;
@@ -354,7 +354,7 @@ export class SearchMintSellPage {
     async verifyCollectionTitle(collectionPage: Page, expectedTitle: string): Promise<boolean> {
         console.log(`\n=== Verify collection title: "${expectedTitle}" ===`);
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Extract and store collection address from URL
         const currentUrl = collectionPage.url();
@@ -410,14 +410,14 @@ export class SearchMintSellPage {
         console.log('\n=== Getting HIGHEST token ID from COMMUNITY GALLERY (before mint) ===');
 
         try {
-            await collectionPage.waitForTimeout(2000);
+            await collectionPage.waitForTimeout(1500);
 
             // Scroll to COMMUNITY GALLERY section
             const gallerySection = collectionPage.locator('text=COMMUNITY GALLERY').first();
             if (await gallerySection.isVisible({ timeout: 3000 }).catch(() => false)) {
                 await gallerySection.scrollIntoViewIfNeeded().catch(() => {});
                 console.log('Scrolled to COMMUNITY GALLERY section');
-                await collectionPage.waitForTimeout(1500);
+                await collectionPage.waitForTimeout(1000);
             }
 
             const allTokenIds: number[] = [];
@@ -505,12 +505,12 @@ export class SearchMintSellPage {
     async clickMintThis(collectionPage: Page): Promise<void> {
         console.log('\n=== Click Mint this button ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
 
         let clicked = false;
         for (const selector of SEARCH_MINT_SELL_SELECTORS.MINT_THIS_BUTTON) {
             const btn = collectionPage.locator(selector).first();
-            if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await btn.click();
                 console.log(`Clicked Mint this with selector: ${selector}`);
                 clicked = true;
@@ -524,14 +524,14 @@ export class SearchMintSellPage {
             await textBtn.click();
         }
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
         console.log('Mint UI opened!');
     }
 
     async uploadMintImage(collectionPage: Page, imagePath: string, imageNumber: number = 1): Promise<void> {
         console.log(`\n=== Upload image ${imageNumber} for Mint ===`);
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
         const absolutePath = path.resolve(imagePath);
 
         // Find file inputs in modal
@@ -564,7 +564,7 @@ export class SearchMintSellPage {
         });
 
         // Wait for upload to complete
-        await collectionPage.waitForTimeout(3000);
+        await collectionPage.waitForTimeout(2000);
 
         console.log(`Image ${imageNumber} upload completed!`);
     }
@@ -572,7 +572,7 @@ export class SearchMintSellPage {
     async clickAddNFT(collectionPage: Page): Promise<void> {
         console.log('\n=== Click + Add button to add NFT ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1000);
 
         let clicked = false;
 
@@ -604,7 +604,7 @@ export class SearchMintSellPage {
         if (!clicked) {
             console.log('Warning: Could not find + Add button');
         } else {
-            await collectionPage.waitForTimeout(2000);
+            await collectionPage.waitForTimeout(1500);
             console.log('New NFT slot added!');
         }
     }
@@ -612,7 +612,7 @@ export class SearchMintSellPage {
     async clickMintAndGenerate(collectionPage: Page): Promise<void> {
         console.log('\n=== Click Mint and Generate buttons ===');
 
-        await collectionPage.waitForTimeout(1000);
+        await collectionPage.waitForTimeout(500);
 
         // Click Mint button
         let mintClicked = false;
@@ -631,7 +631,7 @@ export class SearchMintSellPage {
             await mintBtn.click();
         }
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Click Generate in popup
         console.log('Looking for popup and clicking Generate...');
@@ -709,7 +709,7 @@ export class SearchMintSellPage {
         console.log(`\n=== Verify ${expectedCount} minted NFTs in COMMUNITY GALLERY ===`);
         console.log(`Previous highest token ID (before mint): ${this.lastCommunityTokenId}`);
 
-        await collectionPage.waitForTimeout(3000);
+        await collectionPage.waitForTimeout(2000);
 
         const tokenUrls: string[] = [];
         const newTokenIds: number[] = [];
@@ -720,7 +720,7 @@ export class SearchMintSellPage {
             if (await gallerySection.isVisible({ timeout: 3000 }).catch(() => false)) {
                 await gallerySection.scrollIntoViewIfNeeded().catch(() => {});
                 console.log('Scrolled to COMMUNITY GALLERY section');
-                await collectionPage.waitForTimeout(2000);
+                await collectionPage.waitForTimeout(1500);
             }
 
             // SIMPLE METHOD: Get all token IDs from page text using # pattern
@@ -1030,7 +1030,7 @@ export class SearchMintSellPage {
     async closeAllPopups(page: Page): Promise<void> {
         console.log('\n=== Close all popups ===');
 
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(500);
 
         // Try multiple times to close all popups (max 5 attempts)
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -1060,7 +1060,7 @@ export class SearchMintSellPage {
                     if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
                         console.log(`Found X button with: ${selector}`);
                         await closeBtn.click({ force: true });
-                        await page.waitForTimeout(1500);
+                        await page.waitForTimeout(1000);
                         closed = true;
                         break;
                     }
@@ -1077,7 +1077,7 @@ export class SearchMintSellPage {
                         if (await closeBtn.isVisible({ timeout: 500 }).catch(() => false)) {
                             console.log(`Closing with selector: ${selector}`);
                             await closeBtn.click({ force: true });
-                            await page.waitForTimeout(1500);
+                            await page.waitForTimeout(1000);
                             closed = true;
                             break;
                         }
@@ -1102,7 +1102,7 @@ export class SearchMintSellPage {
                         if (!btnText || btnText.trim().length < 3) {
                             console.log(`Clicking SVG button ${i} (text: "${btnText?.trim()}")`);
                             await btn.click({ force: true });
-                            await page.waitForTimeout(1500);
+                            await page.waitForTimeout(1000);
                             closed = true;
                             break;
                         }
@@ -1119,7 +1119,7 @@ export class SearchMintSellPage {
                     if (await overlay.isVisible({ timeout: 500 }).catch(() => false)) {
                         console.log('Clicking on overlay to close');
                         await overlay.click({ force: true, position: { x: 10, y: 10 } });
-                        await page.waitForTimeout(1000);
+                        await page.waitForTimeout(800);
                         closed = true;
                     }
                 } catch (e) {
@@ -1131,11 +1131,11 @@ export class SearchMintSellPage {
             if (!closed) {
                 console.log('Pressing Escape to close popup');
                 await page.keyboard.press('Escape');
-                await page.waitForTimeout(1000);
+                await page.waitForTimeout(800);
             }
 
             // Small wait between attempts
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(300);
         }
 
         // Final check and debug
@@ -1157,7 +1157,7 @@ export class SearchMintSellPage {
     async closeMintSuccessPopup(page: Page): Promise<void> {
         console.log('\n=== Close Mint Success popup ===');
 
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(1500);
 
         // Check if dialog is open
         const dialogOpen = await page.locator('div[role="dialog"]:visible').first().isVisible({ timeout: 1000 }).catch(() => false);
@@ -1169,7 +1169,7 @@ export class SearchMintSellPage {
         // Method 1: Press Escape (most reliable based on testing)
         console.log('Pressing Escape to close popup...');
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(1000);
 
         let stillOpen = await page.locator('div[role="dialog"]:visible').first().isVisible({ timeout: 500 }).catch(() => false);
         if (!stillOpen) {
@@ -1180,7 +1180,7 @@ export class SearchMintSellPage {
         // Method 2: Click outside the dialog
         console.log('Trying to click outside dialog...');
         await page.mouse.click(10, 10);
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(1000);
 
         stillOpen = await page.locator('div[role="dialog"]:visible').first().isVisible({ timeout: 500 }).catch(() => false);
         if (!stillOpen) {
@@ -1191,7 +1191,7 @@ export class SearchMintSellPage {
         // Method 3: Try Escape again
         console.log('Trying Escape again...');
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(1000);
 
         stillOpen = await page.locator('div[role="dialog"]:visible').first().isVisible({ timeout: 500 }).catch(() => false);
         if (!stillOpen) {
@@ -1207,7 +1207,7 @@ export class SearchMintSellPage {
     async clickMyCollectibleTab(collectionPage: Page): Promise<void> {
         console.log('\n=== Click My Collectible tab ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Debug: List all buttons/tabs in dialog
         const dialogButtons = collectionPage.locator('div[role="dialog"] button, [data-state="open"] button');
@@ -1284,7 +1284,7 @@ export class SearchMintSellPage {
             console.log('Warning: Could not click My Collectible tab');
         }
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
         console.log('My Collectible tab flow completed');
     }
 
@@ -1295,7 +1295,7 @@ export class SearchMintSellPage {
     async hoverOnFirstNFTAndClickSell(collectionPage: Page): Promise<void> {
         console.log('\n=== Hover on first NFT and click Sell ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Extract collection address from URL
         const currentUrl = collectionPage.url();
@@ -1390,7 +1390,7 @@ export class SearchMintSellPage {
         console.log('Hovering on NFT card...');
         await nftCard.scrollIntoViewIfNeeded().catch(() => {});
         await nftCard.hover({ force: true });
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Find and click Sell button
         console.log('Looking for Sell button...');
@@ -1434,7 +1434,7 @@ export class SearchMintSellPage {
         }
 
         // Wait for sell popup/view to open
-        await collectionPage.waitForTimeout(3000);
+        await collectionPage.waitForTimeout(2000);
 
         console.log('Sell button on card clicked!');
     }
@@ -1442,7 +1442,7 @@ export class SearchMintSellPage {
     async clickSellInPopup(collectionPage: Page): Promise<void> {
         console.log('\n=== Click Sell button in popup ===');
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
 
         // Find ALL dialogs - we need the newest/last one (Sell items popup)
         const allDialogs = collectionPage.locator('div[role="dialog"], [data-state="open"]');
@@ -1550,7 +1550,7 @@ export class SearchMintSellPage {
             console.log('Sell button clicked!');
         }
 
-        await collectionPage.waitForTimeout(2000);
+        await collectionPage.waitForTimeout(1500);
     }
 
     async waitForSoldSuccessfully(collectionPage: Page): Promise<string> {
