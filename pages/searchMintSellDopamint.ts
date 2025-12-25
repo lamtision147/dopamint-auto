@@ -223,33 +223,22 @@ export class SearchMintSellPage {
 
         let resultClicked = false;
 
-        // Method 1: Find FIRST clickable item in dropdown (regardless of text)
-        // This is more reliable since search text may differ from displayed result
-        const firstResultSelectors = [
-            // Try finding the specific collection link by partial text
-            'a:has-text("Vu test")',
-            'a:has-text("ChatGPT")',
-            // First result in dropdown - click first visible option
-            '[role="listbox"] [role="option"]',
-            '[role="menu"] [role="menuitem"]',
-            // Dropdown items
-            '[class*="dropdown"] a',
-            '[class*="popover"] a',
-            '[class*="result"] a',
-            '[class*="suggestion"] a',
-            '[class*="autocomplete"] a',
-            '[class*="search"] a',
-            '[class*="list"] a',
-            // Links to collections
+        // Method 1: Find collection link that MATCHES the search text
+        // Search for links containing the search text (case-insensitive partial match)
+        const searchLower = searchText.toLowerCase();
+
+        // Build selectors specifically for this search text
+        const specificSelectors = [
+            `a:has-text("${searchText}")`,
+            `[role="option"]:has-text("${searchText}")`,
+            `[class*="result"] a`,
+            `[class*="dropdown"] a`,
+            `[class*="suggestion"] a`,
             'a[href*="collection"]',
-            'a[href*="collections"]',
-            // Any link with nft
-            'a[href*="nft"]',
         ];
 
-        for (const selector of firstResultSelectors) {
+        for (const selector of specificSelectors) {
             try {
-                // Get all matching items and filter
                 const items = this.page.locator(selector);
                 const count = await items.count();
 
@@ -260,38 +249,42 @@ export class SearchMintSellPage {
 
                     const text = await item.textContent().catch(() => '');
                     const href = await item.getAttribute('href').catch(() => '');
+                    const textLower = text?.toLowerCase() || '';
 
-                    // Skip header/nav links and links without collection/nft in href
+                    // Skip header/nav links
                     const isInHeader = await item.evaluate((el) => {
                         return !!el.closest('header') || !!el.closest('nav');
                     }).catch(() => false);
+                    if (isInHeader) continue;
 
-                    if (isInHeader) {
-                        console.log(`Skipping header/nav link: "${text?.substring(0, 30)}..."`);
-                        continue;
-                    }
+                    // Check if this result matches our search text
+                    // Normalize both strings: remove spaces and special chars for comparison
+                    const normalizedSearch = searchLower.replace(/[\s\-\_\.]/g, '');
+                    const normalizedText = textLower.replace(/[\s\-\_\.]/g, '');
 
-                    console.log(`Found result [${i}]: "${text?.trim().substring(0, 50)}", href: "${href}"`);
+                    // Check if normalized search is contained in normalized text or vice versa
+                    const containsMatch = normalizedText.includes(normalizedSearch) ||
+                                         normalizedSearch.includes(normalizedText.substring(0, normalizedSearch.length));
 
-                    // If we have href with collection/nft, navigate directly
-                    if (href && href.length > 1 && (href.includes('collection') || href.includes('nft'))) {
+                    // Also check word-by-word matching
+                    const searchWords = searchLower.split(/[\s\-]+/).filter(w => w.length > 1);
+                    const matchCount = searchWords.filter(word => textLower.includes(word)).length;
+                    const matchRatio = searchWords.length > 0 ? matchCount / searchWords.length : 0;
+
+                    console.log(`Checking [${i}]: "${text?.trim().substring(0, 50)}"`);
+                    console.log(`  Normalized: "${normalizedSearch}" vs "${normalizedText.substring(0, 30)}..." containsMatch=${containsMatch}`);
+                    console.log(`  Words: ${matchCount}/${searchWords.length} (${(matchRatio * 100).toFixed(0)}%)`);
+
+                    // Match if: contains match OR at least 50% word match
+                    if ((containsMatch || matchRatio >= 0.5) && href && href.includes('collection')) {
                         let fullUrl = href;
                         if (href.startsWith('/')) {
                             const baseUrl = new URL(this.page.url());
                             fullUrl = `${baseUrl.origin}${href}`;
                         }
-                        console.log(`Navigating to: ${fullUrl}`);
+                        console.log(`✅ Match found! Navigating to: ${fullUrl}`);
                         await this.page.goto(fullUrl, { waitUntil: 'domcontentloaded' });
-                        // Short wait for page to stabilize
                         await this.page.waitForTimeout(1000);
-                        resultClicked = true;
-                        break;
-                    }
-
-                    // If text contains search text or collection name pattern, click it
-                    if (text && (text.includes('Vu') || text.includes('ChatGPT') || text.includes('collection'))) {
-                        await item.click({ force: true, timeout: 3000 });
-                        console.log('Clicked result!');
                         resultClicked = true;
                         break;
                     }
