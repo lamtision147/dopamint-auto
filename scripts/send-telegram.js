@@ -16,6 +16,7 @@ if (fs.existsSync(envPath)) {
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const THREAD_ID = process.env.TELEGRAM_THREAD_ID; // Optional: for supergroup topics
 
 if (!BOT_TOKEN || !CHAT_ID) {
     console.error('Error: Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
@@ -25,11 +26,16 @@ if (!BOT_TOKEN || !CHAT_ID) {
 
 function sendTelegramMessage(message) {
     return new Promise((resolve, reject) => {
-        const data = JSON.stringify({
+        const payload = {
             chat_id: CHAT_ID,
             text: message,
             parse_mode: 'HTML'
-        });
+        };
+        // Add message_thread_id for supergroup topics
+        if (THREAD_ID) {
+            payload.message_thread_id = parseInt(THREAD_ID, 10);
+        }
+        const data = JSON.stringify(payload);
 
         const options = {
             hostname: 'api.telegram.org',
@@ -70,6 +76,11 @@ function sendTelegramPhoto(photoPath, caption) {
         let body = '';
         body += `--${boundary}\r\n`;
         body += `Content-Disposition: form-data; name="chat_id"\r\n\r\n${CHAT_ID}\r\n`;
+        // Add message_thread_id for supergroup topics
+        if (THREAD_ID) {
+            body += `--${boundary}\r\n`;
+            body += `Content-Disposition: form-data; name="message_thread_id"\r\n\r\n${THREAD_ID}\r\n`;
+        }
         body += `--${boundary}\r\n`;
         body += `Content-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
         body += `--${boundary}\r\n`;

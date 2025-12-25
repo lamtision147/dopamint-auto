@@ -4,6 +4,7 @@ env:
   secrets-manager:
     TELEGRAM_BOT_TOKEN: "dopamint-secrets:TELEGRAM_BOT_TOKEN"
     TELEGRAM_CHAT_ID: "dopamint-secrets:TELEGRAM_CHAT_ID"
+    TELEGRAM_THREAD_ID: "dopamint-secrets:TELEGRAM_THREAD_ID"
     DOPAMINT_EMAIL: "dopamint-secrets:DOPAMINT_EMAIL"
     DOPAMINT_PASSWORD: "dopamint-secrets:DOPAMINT_PASSWORD"
     METAMASK_SEED_PHRASE: "dopamint-secrets:METAMASK_SEED_PHRASE"
@@ -31,6 +32,7 @@ phases:
         cat > .env.telegram << EOF
         TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
         TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+        TELEGRAM_THREAD_ID=${TELEGRAM_THREAD_ID}
         EOF
       # Create .env.test for test credentials
       - |
