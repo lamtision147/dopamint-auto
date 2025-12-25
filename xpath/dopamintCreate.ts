@@ -69,10 +69,21 @@ export const CREATE_SELECTORS = {
 
     // ChatGPT option in dropdown
     CHATGPT_OPTION: [
-        '[role="option"]:has-text("ChatGPT")',
-        'li:has-text("ChatGPT")',
+        '[role="option"]:has-text("ChatGPT"):not(:has-text("1.5"))',
+        'li:has-text("ChatGPT"):not(:has-text("1.5"))',
         'div[role="listbox"] >> text=ChatGPT',
         'text=ChatGPT',
+    ],
+
+    // ChatGPT image 1.5 option in dropdown
+    CHATGPT_15_OPTION: [
+        '[role="option"]:has-text("ChatGPT image 1.5")',
+        '[role="option"]:has-text("ChatGPT 1.5")',
+        'li:has-text("ChatGPT image 1.5")',
+        'li:has-text("ChatGPT 1.5")',
+        'div[role="listbox"] >> text=ChatGPT image 1.5',
+        'text=ChatGPT image 1.5',
+        'text=ChatGPT 1.5',
     ],
 
     // Image Upload

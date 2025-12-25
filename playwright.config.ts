@@ -6,7 +6,7 @@ export default defineConfig({
   fullyParallel: true, // Enable full parallel execution across all test files
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 7, // 7 workers to run all tests in parallel (1 login + 3 create + 3 searchMintSell)
+  workers: 9, // 9 workers to run all tests in parallel (1 login + 4 create + 4 searchMintSell)
   reporter: [['list'], ['html', { open: 'never' }]],
   timeout: 600000, // 10 minutes global timeout (increased for parallel execution with delays)
   use: {

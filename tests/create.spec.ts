@@ -17,7 +17,8 @@ const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 const MODEL_TO_INDEX: Record<string, number> = {
     'Nano Banana Pro': 0,
     'Nano Banana': 1,
-    'ChatGPT': 2
+    'ChatGPT': 2,
+    'ChatGPT image 1.5': 3
 };
 
 export const test = baseTest.extend<{
@@ -207,6 +208,10 @@ test.describe('Create NFT Flow', () => {
         await runCreateFlowWithModel('ChatGPT', wallet, page, context);
     });
 
+    test("Case 4: Create NFT with ChatGPT image 1.5 model", async ({ wallet, page, context }) => {
+        await runCreateFlowWithModel('ChatGPT image 1.5', wallet, page, context);
+    });
+
     test.afterEach(async ({ context }, testInfo) => {
         // Extract model from test title
         const modelMatch = testInfo.title.match(/with (.+) model/);
@@ -268,7 +273,8 @@ test.describe('Create NFT Flow', () => {
         const modelFiles = [
             'create-info-nano-banana-pro.json',
             'create-info-nano-banana.json',
-            'create-info-chatgpt.json'
+            'create-info-chatgpt.json',
+            'create-info-chatgpt-image-1.5.json'
         ];
 
         const allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string; error?: string}> = [];

@@ -8,7 +8,7 @@ import fs from 'fs';
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
 // Model type definition
-export type AIModel = 'Nano Banana Pro' | 'Nano Banana' | 'ChatGPT';
+export type AIModel = 'Nano Banana Pro' | 'Nano Banana' | 'ChatGPT' | 'ChatGPT image 1.5';
 
 export class DopamintCreatePage {
     readonly context: BrowserContext;
@@ -284,6 +284,49 @@ export class DopamintCreatePage {
         }
     }
 
+    async selectChatGPT15(): Promise<void> {
+        console.log('\n=== Select ChatGPT image 1.5 model ===');
+
+        await this.page.waitForTimeout(1000);
+
+        // Open dropdown
+        await this.openModelDropdown();
+
+        // Select ChatGPT image 1.5 option
+        await this.page.waitForTimeout(500);
+        const chatgpt15Option = await this.findElementFromSelectors(
+            CREATE_SELECTORS.CHATGPT_15_OPTION,
+            5000
+        );
+
+        if (chatgpt15Option) {
+            await chatgpt15Option.click();
+            await this.page.waitForTimeout(500);
+            this.selectedModel = 'ChatGPT image 1.5';
+            console.log('✅ Selected ChatGPT image 1.5 model!');
+        } else {
+            // Fallback - try text matching
+            const optionText = this.page.getByText('ChatGPT image 1.5', { exact: false }).first();
+            if (await optionText.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await optionText.click();
+                await this.page.waitForTimeout(500);
+                this.selectedModel = 'ChatGPT image 1.5';
+                console.log('✅ Clicked by text "ChatGPT image 1.5"!');
+            } else {
+                // Try alternative text
+                const altOption = this.page.getByText('ChatGPT 1.5', { exact: false }).first();
+                if (await altOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+                    await altOption.click();
+                    await this.page.waitForTimeout(500);
+                    this.selectedModel = 'ChatGPT image 1.5';
+                    console.log('✅ Clicked by text "ChatGPT 1.5"!');
+                } else {
+                    throw new Error('ChatGPT image 1.5 option not found');
+                }
+            }
+        }
+    }
+
     // Generic method to select any model
     async selectModel(model: AIModel): Promise<void> {
         switch (model) {
@@ -295,6 +338,9 @@ export class DopamintCreatePage {
                 break;
             case 'ChatGPT':
                 await this.selectChatGPT();
+                break;
+            case 'ChatGPT image 1.5':
+                await this.selectChatGPT15();
                 break;
             default:
                 throw new Error(`Unknown model: ${model}`);

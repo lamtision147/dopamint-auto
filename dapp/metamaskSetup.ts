@@ -13,8 +13,8 @@ const BASE_SEPOLIA_RPC_ENDPOINTS = [
 // Each file has a unique offset to avoid MetaMask conflicts
 export const TEST_FILE_OFFSETS = {
   LOGIN: 0,           // dopamintLogin.spec.ts: 1 test, starts at 0s
-  CREATE: 1,          // create.spec.ts: 3 tests, starts at 30s (30s, 60s, 90s)
-  SEARCH_MINT_SELL: 4 // searchMintSell.spec.ts: 3 tests, starts at 120s (120s, 150s, 180s)
+  CREATE: 1,          // create.spec.ts: 4 tests, starts at 30s (30s, 60s, 90s, 120s)
+  SEARCH_MINT_SELL: 5 // searchMintSell.spec.ts: 4 tests, starts at 150s (150s, 180s, 210s, 240s)
 };
 
 // Delay between each test in milliseconds

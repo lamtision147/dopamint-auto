@@ -14,13 +14,14 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
 // Collection type definition
-type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD';
+type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu testChatGPT';
 
 // Map collection name to test index for staggered parallel execution
 const COLLECTION_TO_INDEX: Record<string, number> = {
     'Auto Banana - OLD': 0,
     'Auto ChatGPT - OLD': 1,
-    'Auto Banana Pro - OLD': 2
+    'Auto Banana Pro - OLD': 2,
+    'Vu testChatGPT': 3
 };
 
 export const test = baseTest.extend<{
@@ -232,6 +233,10 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         await runSearchMintSellFlow('Auto Banana Pro - OLD', wallet, page, context);
     });
 
+    test('Case 4: Search collection "Vu testChatGPT", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
+        await runSearchMintSellFlow('Vu testChatGPT', wallet, page, context);
+    });
+
     test.afterEach(async ({ context }, testInfo) => {
         // Extract collection name from test title
         const collectionMatch = testInfo.title.match(/collection "(.+)"/);
@@ -292,7 +297,8 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         const collectionFiles = [
             'token-urls-auto-banana---old.json',
             'token-urls-auto-chatgpt---old.json',
-            'token-urls-auto-banana-pro---old.json'
+            'token-urls-auto-banana-pro---old.json',
+            'token-urls-vu-testchatgpt.json'
         ];
 
         const allResults: Array<{
