@@ -24,6 +24,14 @@ const COLLECTION_TO_INDEX: Record<string, number> = {
     'Vu testChatGPT': 3
 };
 
+// Map collection name to model name for display in notifications
+const COLLECTION_TO_MODEL: Record<string, string> = {
+    'Auto Banana - OLD': 'Nano Banana',
+    'Auto ChatGPT - OLD': 'ChatGPT',
+    'Auto Banana Pro - OLD': 'Nano Banana Pro',
+    'Vu testChatGPT': 'ChatGPT image 1.5'
+};
+
 export const test = baseTest.extend<{
     context: BrowserContext;
     wallet: Dappwright;
@@ -90,6 +98,7 @@ async function runSearchMintSellFlow(
 
     // Screenshot collection details page
     const safeCollectionName = collectionName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const modelName = COLLECTION_TO_MODEL[collectionName] || collectionName;
     await collectionPage.screenshot({ path: `${outputDir}/collection-details-${safeCollectionName}.png` });
     console.log(`Screenshot saved: collection-details-${safeCollectionName}.png`);
 
@@ -181,6 +190,7 @@ async function runSearchMintSellFlow(
 
     console.log('\n========================================');
     console.log('✅ TEST COMPLETED SUCCESSFULLY!');
+    console.log(`🤖 Model: ${modelName}`);
     console.log(`📦 Collection: ${collectionName}`);
     console.log(`🎨 NFTs minted: ${mintResult.count}`);
     if (mintedTokenUrls.length > 0) {
@@ -199,7 +209,7 @@ async function runSearchMintSellFlow(
     const tokenInfo = {
         mintedUrls: mintedTokenUrls,
         soldUrl: soldTokenUrl || '',
-        collectionName: collectionName,
+        collectionName: modelName, // Use model name for display in notifications
         mintCount: mintResult.count,
         status: 'PASSED'
     };
@@ -260,11 +270,12 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
             }
 
             // Save failed result
+            const modelName = COLLECTION_TO_MODEL[collectionName] || collectionName;
             const tokenInfoPath = path.resolve(outputDir, `token-urls-${safeCollectionName}.json`);
             const failedResult = {
                 mintedUrls: [],
                 soldUrl: '',
-                collectionName: collectionName,
+                collectionName: modelName, // Use model name for display in notifications
                 mintCount: 0,
                 status: 'FAILED',
                 error: testInfo.error?.message || 'Unknown error'
