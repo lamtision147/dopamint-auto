@@ -78,6 +78,7 @@ async function runSearchMintSellFlow(
     // Determine collection type
     const collectionType = COLLECTION_TO_TYPE[collectionName] || 'bonding';
     const isFairLaunch = collectionType === 'fairlaunch';
+
     // ========== PHASE 1: LOGIN WITH METAMASK ==========
     console.log('\n========== PHASE 1: LOGIN WITH METAMASK ==========');
     const dopamintPage = new DopamintLoginPage(context, wallet);

@@ -557,11 +557,12 @@ async function main() {
                 const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
                 const modelName = result.model || 'Unknown';
 
-                // Collection with hyperlink
+                // Collection name with hyperlink
                 let collectionLink = '-';
-                if (result.collectionUrl) {
-                    const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
-                    collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+                if (result.collectionUrl && result.collectionName) {
+                    collectionLink = `<a href="${result.collectionUrl}">${escapeHtml(result.collectionName)}</a>`;
+                } else if (result.collectionUrl) {
+                    collectionLink = `<a href="${result.collectionUrl}">View Collection</a>`;
                 }
 
                 // Minted count
@@ -569,7 +570,7 @@ async function main() {
 
                 output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
                 output += `\n   │     ├ 🎨 Minted : ${mintedText}`;
-                output += `\n   │     ├ 🔗 Link : ${collectionLink}`;
+                output += `\n   │     ├ 📦 Collection : ${collectionLink}`;
 
                 // Show error if failed
                 if (result.status === 'FAILED' && result.error) {
@@ -618,31 +619,32 @@ async function main() {
                 // Use model mapping for display name
                 const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
-                // Collection with hyperlink
+                // Collection name with hyperlink (use collectionName which is model name)
                 let collectionLink = '-';
-                if (result.collectionUrl) {
-                    const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
-                    collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+                if (result.collectionUrl && result.collectionName) {
+                    collectionLink = `<a href="${result.collectionUrl}">${escapeHtml(result.collectionName)}</a>`;
+                } else if (result.collectionUrl) {
+                    collectionLink = `<a href="${result.collectionUrl}">View Collection</a>`;
                 }
 
                 // Minted URLs with hyperlinks (LINK#1 LINK#2)
                 let mintedLinks = '-';
                 if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
                     mintedLinks = result.mintedUrls
-                        .map((url, i) => createLinkWithIcon(`#${i + 1}`, url))
+                        .map((url, i) => `<a href="${url}">#${i + 1}</a>`)
                         .join(' ');
                 }
 
                 // Sold URL with hyperlink
                 let soldLink = '-';
                 if (result.status === 'PASSED' && result.soldUrl) {
-                    soldLink = createLinkWithIcon('LINK', result.soldUrl);
+                    soldLink = `<a href="${result.soldUrl}">View</a>`;
                 }
 
                 output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
                 output += `\n   │     ├ 🎨 Minted : ${mintedLinks}`;
                 output += `\n   │     ├ 💵 Sold : ${soldLink}`;
-                output += `\n   │     ├ 🔗 Collection : ${collectionLink}`;
+                output += `\n   │     ├ 📦 Collection : ${collectionLink}`;
 
                 // Show error if failed
                 if (result.status === 'FAILED' && result.error) {
