@@ -263,6 +263,44 @@ function getCreateInfo(outputDir = '') {
     return null;
 }
 
+// Collection to Model mapping for display
+const COLLECTION_TO_MODEL = {
+    'Auto Banana - OLD': 'Nano Banana',
+    'Auto ChatGPT - OLD': 'ChatGPT',
+    'Auto Banana Pro - OLD': 'Nano Banana Pro',
+    'Vu testChatGPT': 'ChatGPT image 1.5'
+};
+
+// Get model name from collection name
+function getModelName(collectionName) {
+    return COLLECTION_TO_MODEL[collectionName] || collectionName;
+}
+
+// Escape HTML special characters
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+// Create hyperlink
+function createLink(text, url) {
+    if (!url) return text;
+    return `<a href="${url}">${escapeHtml(text)}</a>`;
+}
+
+// Format table header
+function formatTableHeader(columns) {
+    return `<b>${columns.join(' │ ')}</b>`;
+}
+
+// Format table separator
+function formatTableSeparator(length = 40) {
+    return '━'.repeat(length);
+}
+
 // Check if any result has failed status
 function hasAnyFailed(results) {
     if (!results || !Array.isArray(results)) return false;
@@ -364,106 +402,132 @@ async function main() {
     // Get create info if exists (for create test)
     const createInfo = getCreateInfo(outputDir);
 
-    let message = `
-${emoji} <b>DOPAMINT AUTO TEST</b>
+    let message = `${emoji} <b>DOPAMINT AUTO TEST</b>
+📅 ${timestamp} │ ⏱ ${formattedDuration}
+📁 <code>${testFile}</code>
+${formatTableSeparator(40)}`;
 
-📋 Test: ${testName}
-📁 File: <code>${testFile}</code>
-📅 Time: ${timestamp}
-📊 Status: <b>${statusText}</b>
-⏱ Duration: ${formattedDuration}
-`.trim();
+    // Format based on test type
+    if (testFile.includes('login')) {
+        // LOGIN TEST FORMAT
+        message += `\n\n${formatTableHeader(['Method', 'Status', 'NOTE'])}`;
+        message += `\n${formatTableSeparator(30)}`;
 
-    // Add error details if test failed
-    if (status === 'FAILED' && logFile) {
-        const errorDetails = getErrorDetails(logFile);
-        if (errorDetails) {
-            message += `\n\n⚠️ <b>Error Details:</b>\n<pre>${errorDetails}</pre>`;
+        const note = status === 'FAILED' ? 'See error below' : '';
+        message += `\nMetaMask │ ${emoji} ${statusText} │ ${note}`;
+
+        // Add error details if test failed
+        if (status === 'FAILED' && logFile) {
+            const errorDetails = getErrorDetails(logFile);
+            if (errorDetails) {
+                const shortError = errorDetails.split('\n')[0].substring(0, 100);
+                message += `\n\n⚠️ <b>Error:</b>\n<code>${shortError}</code>`;
+            }
         }
-    }
+    } else if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
+        // CREATE TEST FORMAT - Table with hyperlinks
+        message += `\n\n${formatTableHeader(['Model', 'Collection', 'Minted', 'Status', 'NOTE'])}`;
+        message += `\n${formatTableSeparator(50)}`;
 
-    // Add create info (all models results) for create test
-    if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
-        // Check if any test failed - override status if needed
-        const anyFailed = hasAnyFailed(createInfo);
-        if (anyFailed && status === 'PASSED') {
-            // This shouldn't happen, but just in case
-            console.log('Warning: Some tests failed but overall status was PASSED');
-        }
-
-        message += `\n\n📊 <b>Model Results (${createInfo.length} tests):</b>`;
-
-        createInfo.forEach((result, index) => {
-            const resultEmoji = result.status === 'PASSED' ? '✅' : '❌';
-            message += `\n\n${resultEmoji} <b>${result.model || 'Unknown'}</b>`;
+        createInfo.forEach((result) => {
+            const statusEmoji = result.status === 'PASSED' ? '✅' : '❌';
+            const modelName = result.model || 'Unknown';
 
             if (result.status === 'PASSED') {
-                message += `\n   📦 Collection: ${result.collectionName || 'N/A'}`;
-                message += `\n   🎨 Minted: ${result.mintedCount || 0} NFTs`;
-                if (result.collectionUrl) {
-                    message += `\n   🔗 Collection URL: ${result.collectionUrl}`;
-                }
+                // Collection with hyperlink
+                const collectionLink = result.collectionUrl
+                    ? createLink('LINK', result.collectionUrl)
+                    : 'N/A';
+
+                // Minted count (no individual URLs for create test)
+                const mintedText = `${result.mintedCount || 0} NFTs`;
+
+                message += `\n${modelName} │ ${collectionLink} │ ${mintedText} │ ${statusEmoji} │`;
             } else {
-                message += `\n   ⚠️ Status: FAILED`;
-                if (result.error) {
-                    // Truncate error message if too long
-                    const errorMsg = result.error.length > 200 ? result.error.substring(0, 200) + '...' : result.error;
-                    message += `\n   💬 Error: <code>${errorMsg}</code>`;
-                }
+                // Failed test
+                const errorNote = result.error
+                    ? result.error.substring(0, 50).replace(/\n/g, ' ') + '...'
+                    : 'Error';
+                message += `\n${modelName} │ - │ - │ ${statusEmoji} │ ${escapeHtml(errorNote)}`;
             }
         });
 
         // Summary
         const passedCount = createInfo.filter(r => r.status === 'PASSED').length;
         const failedCount = createInfo.filter(r => r.status === 'FAILED').length;
-        message += `\n\n📈 <b>Summary:</b> ${passedCount} passed, ${failedCount} failed`;
-    }
+        message += `\n${formatTableSeparator(50)}`;
+        message += `\n📈 <b>Summary:</b> ${passedCount}/${createInfo.length} passed`;
+        if (failedCount > 0) {
+            message += ` (${failedCount} failed)`;
+        }
+    } else if (tokenUrls && testFile.includes('searchMintSell')) {
+        // SEARCH MINT SELL TEST FORMAT - Table with hyperlinks for Minted and Sold
+        message += `\n\n${formatTableHeader(['Model', 'Collection', 'Minted', 'Sold', 'Status', 'NOTE'])}`;
+        message += `\n${formatTableSeparator(55)}`;
 
-    // Add URL if exists (skip for create and searchMintSell tests since each model/collection already has its URL)
-    if (collectionUrl && !testFile.includes('create') && !testFile.includes('searchMintSell')) {
-        message += `\n\n🔗 Collection: ${collectionUrl}`;
-    }
-
-    // Add minted/sold token URLs for searchMintSell test
-    if (tokenUrls && testFile.includes('searchMintSell')) {
-        // Handle both array format (new) and single object format (legacy)
         const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
 
-        message += `\n\n📊 <b>Collection Results (${resultsArray.length} tests):</b>`;
-
-        resultsArray.forEach((result, index) => {
-            const resultEmoji = result.status === 'PASSED' ? '✅' : '❌';
-            message += `\n\n${resultEmoji} <b>${result.collectionName || 'Unknown'}</b>`;
+        resultsArray.forEach((result) => {
+            const statusEmoji = result.status === 'PASSED' ? '✅' : '❌';
+            // Use model mapping for display name
+            const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
             if (result.status === 'PASSED') {
-                message += `\n   🔢 Minted: ${result.mintCount || 0} NFTs`;
+                // Collection link (use first minted URL's collection if available)
+                const collectionLink = result.collectionUrl
+                    ? createLink('LINK', result.collectionUrl)
+                    : '-';
 
+                // Minted URLs with hyperlinks (#1, #2, etc)
+                let mintedLinks = '-';
                 if (result.mintedUrls && result.mintedUrls.length > 0) {
-                    message += `\n   🖼 Minted URLs:`;
-                    result.mintedUrls.forEach((url, i) => {
-                        message += `\n      ${i + 1}. ${url}`;
-                    });
+                    mintedLinks = result.mintedUrls
+                        .map((url, i) => createLink(`#${i + 1}`, url))
+                        .join(' ');
                 }
 
-                if (result.soldUrl) {
-                    message += `\n   💰 Sold: ${result.soldUrl}`;
-                }
+                // Sold URL with hyperlink
+                const soldLink = result.soldUrl
+                    ? createLink('LINK', result.soldUrl)
+                    : '-';
+
+                message += `\n${modelName} │ ${collectionLink} │ ${mintedLinks} │ ${soldLink} │ ${statusEmoji} │`;
             } else {
-                message += `\n   ⚠️ Status: FAILED`;
-                if (result.error) {
-                    const errorMsg = result.error.length > 200 ? result.error.substring(0, 200) + '...' : result.error;
-                    message += `\n   💬 Error: <code>${errorMsg}</code>`;
-                }
+                // Failed test
+                const errorNote = result.error
+                    ? result.error.substring(0, 40).replace(/\n/g, ' ') + '...'
+                    : 'Error';
+                message += `\n${modelName} │ - │ - │ - │ ${statusEmoji} │ ${escapeHtml(errorNote)}`;
             }
         });
 
         // Summary
         const passedCount = resultsArray.filter(r => r.status === 'PASSED').length;
         const failedCount = resultsArray.filter(r => r.status === 'FAILED').length;
-        message += `\n\n📈 <b>Summary:</b> ${passedCount} passed, ${failedCount} failed`;
+        message += `\n${formatTableSeparator(55)}`;
+        message += `\n📈 <b>Summary:</b> ${passedCount}/${resultsArray.length} passed`;
+        if (failedCount > 0) {
+            message += ` (${failedCount} failed)`;
+        }
+    } else {
+        // DEFAULT FORMAT (for other tests)
+        message += `\n\n📊 Status: <b>${statusText}</b>`;
+
+        // Add error details if test failed
+        if (status === 'FAILED' && logFile) {
+            const errorDetails = getErrorDetails(logFile);
+            if (errorDetails) {
+                message += `\n\n⚠️ <b>Error Details:</b>\n<pre>${errorDetails}</pre>`;
+            }
+        }
+
+        // Add URL if exists
+        if (collectionUrl) {
+            message += `\n\n🔗 Collection: ${collectionUrl}`;
+        }
     }
 
-    message += `\n\n🤖 Automated by Playwright`;
+    message += `\n\n🤖 <i>Automated by Playwright</i>`;
 
     try {
         await sendTelegramMessage(message);

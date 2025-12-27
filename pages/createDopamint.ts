@@ -689,6 +689,428 @@ export class DopamintCreatePage {
         return collectionName;
     }
 
+    // ============ FAIR LAUNCH METHODS ============
+
+    async selectFixedPriceOption(): Promise<void> {
+        console.log('\n=== Select Fixed Price option ===');
+
+        await this.page.waitForTimeout(1000);
+
+        let optionSelected = false;
+
+        // Method 1: Find radio button or clickable element for "Fixed Price"
+        const fixedPriceSelectors = [
+            // Radio button selectors
+            'input[type="radio"][value*="fixed"]',
+            'input[type="radio"][value*="Fixed"]',
+            'input[type="radio"]:near(:text("Fixed Price"))',
+            // Label that contains radio
+            'label:has-text("Fixed Price")',
+            'label:has-text("Fixed price")',
+            // Div/button with role
+            '[role="radio"]:has-text("Fixed Price")',
+            '[role="radiogroup"] >> text=Fixed Price',
+            // Generic clickable
+            'div:has-text("Fixed Price"):not(:has(div:has-text("Fixed Price")))',
+            'span:has-text("Fixed Price")',
+        ];
+
+        for (const selector of fixedPriceSelectors) {
+            try {
+                const element = this.page.locator(selector).first();
+                if (await element.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await element.click();
+                    console.log(`Clicked Fixed Price with selector: ${selector}`);
+                    optionSelected = true;
+                    break;
+                }
+            } catch (e) {
+                // Continue
+            }
+        }
+
+        // Method 2: Try getByLabel for radio button
+        if (!optionSelected) {
+            try {
+                const radioLabel = this.page.getByLabel('Fixed Price', { exact: false });
+                if (await radioLabel.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await radioLabel.click();
+                    console.log('Clicked Fixed Price via getByLabel');
+                    optionSelected = true;
+                }
+            } catch (e) {
+                // Continue
+            }
+        }
+
+        // Method 3: Try getByText
+        if (!optionSelected) {
+            try {
+                const textElement = this.page.getByText('Fixed Price', { exact: false }).first();
+                if (await textElement.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await textElement.click();
+                    console.log('Clicked Fixed Price via getByText');
+                    optionSelected = true;
+                }
+            } catch (e) {
+                // Continue
+            }
+        }
+
+        // Method 4: Try clicking parent of radio input
+        if (!optionSelected) {
+            try {
+                const radioInputs = this.page.locator('input[type="radio"]');
+                const count = await radioInputs.count();
+                console.log(`Found ${count} radio inputs`);
+
+                for (let i = 0; i < count; i++) {
+                    const radio = radioInputs.nth(i);
+                    const parent = radio.locator('xpath=..');
+                    const parentText = await parent.textContent().catch(() => '');
+                    console.log(`Radio ${i} parent text: "${parentText?.substring(0, 30)}..."`);
+
+                    if (parentText?.toLowerCase().includes('fixed')) {
+                        await parent.click();
+                        console.log(`Clicked parent of radio ${i} for Fixed Price`);
+                        optionSelected = true;
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.log('Error finding radio inputs:', e);
+            }
+        }
+
+        if (!optionSelected) {
+            console.log('⚠️ Could not select Fixed Price option');
+            await this.page.screenshot({ path: `${outputDir}/fixed-price-not-found.png` });
+        } else {
+            console.log('✅ Fixed Price option selected!');
+        }
+
+        await this.page.waitForTimeout(1000);
+    }
+
+    async fillFairLaunchSettings(price: string, supply: number): Promise<void> {
+        console.log('\n=== Fill Fair Launch settings ===');
+        console.log(`Price: ${price}, Supply: ${supply}`);
+
+        await this.page.waitForTimeout(1000);
+
+        // Fill Price input
+        console.log('Looking for Price input...');
+        let priceInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.FAIR_LAUNCH_PRICE_INPUT,
+            5000
+        );
+
+        if (!priceInput) {
+            // Fallback: find input near "Price" text
+            priceInput = this.page.locator('input[type="number"]').first();
+        }
+
+        if (priceInput) {
+            await priceInput.clear();
+            await priceInput.fill(price);
+            console.log(`✅ Filled price: ${price}`);
+        } else {
+            console.log('⚠️ Price input not found');
+        }
+
+        await this.page.waitForTimeout(500);
+
+        // Uncheck Unlimited checkbox/switch/toggle
+        console.log('Looking for Unlimited switch to uncheck...');
+
+        let unlimitedUnchecked = false;
+
+        // Debug: List ALL switch/checkbox/toggle elements on page
+        console.log('\n--- DEBUG: All switch/toggle elements ---');
+        const allSwitches = this.page.locator('button[role="switch"], button[role="checkbox"], [role="switch"], input[type="checkbox"], button[data-state], [data-state="checked"], [data-state="unchecked"], [data-state="on"], [data-state="off"]');
+        const switchCount = await allSwitches.count();
+        console.log(`Found ${switchCount} switch/toggle elements`);
+
+        for (let i = 0; i < switchCount; i++) {
+            const sw = allSwitches.nth(i);
+            const dataState = await sw.getAttribute('data-state').catch(() => 'N/A');
+            const role = await sw.getAttribute('role').catch(() => 'N/A');
+            const ariaChecked = await sw.getAttribute('aria-checked').catch(() => 'N/A');
+            const isVisible = await sw.isVisible().catch(() => false);
+            // Get parent text for context
+            const parentText = await sw.evaluate((el) => {
+                let parent = el.parentElement;
+                for (let j = 0; j < 3 && parent; j++) {
+                    const text = parent.textContent?.trim();
+                    if (text && text.length < 100) return text;
+                    parent = parent.parentElement;
+                }
+                return '';
+            }).catch(() => '');
+            console.log(`  Switch ${i}: visible=${isVisible}, role="${role}", data-state="${dataState}", aria-checked="${ariaChecked}"`);
+            console.log(`    Context: "${parentText?.substring(0, 60)}..."`);
+        }
+        console.log('--- END DEBUG ---\n');
+
+        // Method 1: Find switch with aria-checked="true" or data-state containing checked/on
+        // and near "Unlimited" text
+        const nearUnlimitedSwitch = this.page.locator('div:has-text("Unlimited") button[role="switch"], div:has-text("Unlimited") [role="switch"], label:has-text("Unlimited") button[role="switch"]');
+        const nearCount = await nearUnlimitedSwitch.count();
+        console.log(`Found ${nearCount} switches near Unlimited text`);
+
+        for (let i = 0; i < nearCount; i++) {
+            const sw = nearUnlimitedSwitch.nth(i);
+            if (await sw.isVisible({ timeout: 1000 }).catch(() => false)) {
+                const ariaChecked = await sw.getAttribute('aria-checked').catch(() => '');
+                const dataState = await sw.getAttribute('data-state').catch(() => '');
+                console.log(`  Near switch ${i}: aria-checked="${ariaChecked}", data-state="${dataState}"`);
+
+                // Click to toggle (if checked/on, this will uncheck it)
+                await sw.click();
+                console.log('✅ Clicked switch near Unlimited!');
+                unlimitedUnchecked = true;
+                break;
+            }
+        }
+
+        // Method 2: Find by looking at label with "Unlimited" and click associated switch
+        if (!unlimitedUnchecked) {
+            // Find small containers that specifically contain "Unlimited" text
+            const unlimitedLabels = this.page.locator('label:has-text("Unlimited"), span:has-text("Unlimited")').filter({ hasText: /^Unlimited$/i });
+            const labelCount = await unlimitedLabels.count();
+            console.log(`Found ${labelCount} Unlimited labels`);
+
+            for (let i = 0; i < labelCount; i++) {
+                const label = unlimitedLabels.nth(i);
+                if (await label.isVisible({ timeout: 500 }).catch(() => false)) {
+                    // Try to find switch in parent or sibling
+                    const parent = label.locator('xpath=./ancestor::div[1]');
+                    const siblingSwitch = parent.locator('button[role="switch"], [role="switch"]').first();
+                    if (await siblingSwitch.isVisible({ timeout: 500 }).catch(() => false)) {
+                        await siblingSwitch.click();
+                        console.log('✅ Clicked switch sibling to Unlimited label!');
+                        unlimitedUnchecked = true;
+                        break;
+                    }
+
+                    // Also try clicking the label itself if it's clickable
+                    try {
+                        await label.click();
+                        console.log('✅ Clicked Unlimited label!');
+                        unlimitedUnchecked = true;
+                        break;
+                    } catch (e) {
+                        // Continue
+                    }
+                }
+            }
+        }
+
+        // Method 3: Find any checked switch and click it if near Supply/Unlimited section
+        if (!unlimitedUnchecked) {
+            const checkedSwitches = this.page.locator('[aria-checked="true"], button[role="switch"][data-state="checked"], button[role="switch"][data-state="on"]');
+            const checkedCount = await checkedSwitches.count();
+            console.log(`Found ${checkedCount} checked switches`);
+
+            for (let i = 0; i < checkedCount; i++) {
+                const sw = checkedSwitches.nth(i);
+                if (await sw.isVisible({ timeout: 500 }).catch(() => false)) {
+                    const parentText = await sw.evaluate((el) => {
+                        let parent = el.parentElement;
+                        for (let j = 0; j < 5 && parent; j++) {
+                            const text = parent.textContent?.toLowerCase() || '';
+                            if (text.includes('unlimited') || text.includes('supply')) {
+                                return text;
+                            }
+                            parent = parent.parentElement;
+                        }
+                        return '';
+                    }).catch(() => '');
+
+                    if (parentText) {
+                        await sw.click();
+                        console.log('✅ Clicked checked switch in Unlimited/Supply area!');
+                        unlimitedUnchecked = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Method 4: Click by getByLabel
+        if (!unlimitedUnchecked) {
+            try {
+                const switchByLabel = this.page.getByLabel('Unlimited', { exact: false });
+                if (await switchByLabel.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await switchByLabel.click();
+                    console.log('✅ Clicked via getByLabel("Unlimited")!');
+                    unlimitedUnchecked = true;
+                }
+            } catch (e) {
+                // Continue
+            }
+        }
+
+        // Method 5: Find switch in form section after Price
+        if (!unlimitedUnchecked) {
+            // The form likely has: Price input -> Unlimited switch -> Supply input
+            // Find the switch that comes after the price input
+            const formSwitches = this.page.locator('form button[role="switch"], div[class*="form"] button[role="switch"]');
+            const formSwitchCount = await formSwitches.count();
+            console.log(`Found ${formSwitchCount} switches in form`);
+
+            for (let i = 0; i < formSwitchCount; i++) {
+                const sw = formSwitches.nth(i);
+                if (await sw.isVisible({ timeout: 500 }).catch(() => false)) {
+                    await sw.click();
+                    console.log(`✅ Clicked form switch ${i}!`);
+                    unlimitedUnchecked = true;
+                    break;
+                }
+            }
+        }
+
+        if (!unlimitedUnchecked) {
+            console.log('⚠️ Could not find/click Unlimited switch');
+            await this.page.screenshot({ path: `${outputDir}/unlimited-switch-not-found.png` });
+        }
+
+        await this.page.waitForTimeout(1500); // Wait for UI to update after toggle
+
+        // Fill Supply input (should be visible after unchecking Unlimited)
+        console.log('Looking for Supply input...');
+
+        // Debug: List all number inputs
+        const numberInputs = this.page.locator('input[type="number"], input[inputmode="numeric"]');
+        const numCount = await numberInputs.count();
+        console.log(`Found ${numCount} number inputs`);
+
+        for (let i = 0; i < numCount; i++) {
+            const inp = numberInputs.nth(i);
+            const placeholder = await inp.getAttribute('placeholder').catch(() => '');
+            const name = await inp.getAttribute('name').catch(() => '');
+            const value = await inp.inputValue().catch(() => '');
+            const isVisible = await inp.isVisible().catch(() => false);
+            const isDisabled = await inp.isDisabled().catch(() => false);
+            console.log(`  Input ${i}: placeholder="${placeholder}", name="${name}", value="${value}", visible=${isVisible}, disabled=${isDisabled}`);
+        }
+
+        // Find supply input - should be the second visible number input or one with supply-related placeholder/name
+        let supplyInput = null;
+
+        // Try by placeholder/name first
+        const supplySelectors = [
+            'input[name*="supply"]',
+            'input[name*="Supply"]',
+            'input[placeholder*="supply"]',
+            'input[placeholder*="Supply"]',
+        ];
+
+        for (const selector of supplySelectors) {
+            const inp = this.page.locator(selector).first();
+            if (await inp.isVisible({ timeout: 1000 }).catch(() => false)) {
+                supplyInput = inp;
+                console.log(`Found supply input with selector: ${selector}`);
+                break;
+            }
+        }
+
+        // Fallback: find the second visible & enabled number input (first is price)
+        if (!supplyInput) {
+            let visibleCount = 0;
+            for (let i = 0; i < numCount; i++) {
+                const inp = numberInputs.nth(i);
+                const isVisible = await inp.isVisible().catch(() => false);
+                const isDisabled = await inp.isDisabled().catch(() => false);
+                if (isVisible && !isDisabled) {
+                    visibleCount++;
+                    if (visibleCount === 2) {
+                        supplyInput = inp;
+                        console.log(`Using second visible enabled number input as supply`);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (supplyInput) {
+            await supplyInput.click();
+            await supplyInput.clear();
+            await supplyInput.fill(supply.toString());
+            // Verify the value was set
+            const finalValue = await supplyInput.inputValue();
+            console.log(`✅ Filled supply: ${supply} (verified: ${finalValue})`);
+        } else {
+            console.log('⚠️ Supply input not found - may still be hidden (Unlimited switch not unchecked)');
+            await this.page.screenshot({ path: `${outputDir}/supply-input-not-found.png` });
+        }
+
+        await this.page.waitForTimeout(500);
+        console.log('✅ Fair Launch settings filled!');
+    }
+
+    async fillPublishCollectionFormFairLaunch(): Promise<string> {
+        console.log('\n=== Fill Publish Collection form (Fair Launch) ===');
+
+        await this.page.waitForTimeout(1000);
+
+        // Step 1: Select Fixed Price option
+        await this.selectFixedPriceOption();
+
+        // Step 2: Fill Fair Launch settings
+        await this.fillFairLaunchSettings('0.000012', 10);
+
+        // Step 3: Fill General settings
+        const timestampCode = this.generateTimestampCode();
+        const collectionName = `Automation Test Fairlaunch ${timestampCode}`;
+        const description = 'Automation test for Fair Launch collection with Fixed Price';
+        const symbol = `ATF${timestampCode}`;
+
+        console.log(`Collection Name: ${collectionName}`);
+        console.log(`Description: ${description}`);
+        console.log(`Symbol: ${symbol}`);
+
+        // Fill Collection Name
+        const nameInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.COLLECTION_NAME_INPUT,
+            10000
+        );
+        if (nameInput) {
+            await nameInput.fill(collectionName);
+        } else {
+            const input = this.page.locator('input').filter({ hasText: '' }).first();
+            await input.fill(collectionName);
+        }
+
+        await this.page.waitForTimeout(500);
+
+        // Fill Description
+        const descInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.DESCRIPTION_INPUT,
+            5000
+        );
+        if (descInput) {
+            await descInput.fill(description);
+        } else {
+            const textarea = this.page.locator('textarea').first();
+            await textarea.fill(description);
+        }
+
+        await this.page.waitForTimeout(500);
+
+        // Fill Symbol
+        const symbolInput = await this.findElementFromSelectors(
+            CREATE_SELECTORS.SYMBOL_INPUT,
+            5000
+        );
+        if (symbolInput) {
+            await symbolInput.fill(symbol);
+        }
+
+        console.log('✅ Fair Launch form filled!');
+        return collectionName;
+    }
+
     async clickPublishAndConfirm(): Promise<void> {
         console.log('\n=== Click Publish and confirm ===');
 

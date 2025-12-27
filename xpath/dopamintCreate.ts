@@ -230,5 +230,53 @@ export const CREATE_SELECTORS = {
         '.dialog-close-button',
         '[data-radix-collection-item] button:has(svg)',
     ],
-    
+
+    // ============ FAIR LAUNCH / FIXED PRICE SELECTORS ============
+
+    // Setting collection type dropdown/options
+    COLLECTION_TYPE_DROPDOWN: [
+        'button:has-text("Setting collection type")',
+        '[role="combobox"]:has-text("Setting")',
+        'button:has-text("Free Mint")',
+        'div[class*="select"]:has-text("collection type")',
+    ],
+
+    // Fixed Price option in dropdown
+    FIXED_PRICE_OPTION: [
+        '[role="option"]:has-text("Fixed Price")',
+        'li:has-text("Fixed Price")',
+        'div[role="listbox"] >> text=Fixed Price',
+        'text=Fixed Price',
+    ],
+
+    // Fair launch settings - Price input
+    FAIR_LAUNCH_PRICE_INPUT: [
+        'input[name="price"]',
+        'input[placeholder*="price"]',
+        'input[placeholder*="Price"]',
+        'label:has-text("Price") + input',
+        'label:has-text("Price") ~ input',
+        'div:has-text("Fair launch") input[type="number"]',
+        'input[type="number"]',
+    ],
+
+    // Fair launch settings - Unlimited checkbox
+    UNLIMITED_CHECKBOX: [
+        'input[type="checkbox"]:near(:text("Unlimited"))',
+        'label:has-text("Unlimited") input[type="checkbox"]',
+        'button[role="checkbox"]:near(:text("Unlimited"))',
+        '[data-state]:near(:text("Unlimited"))',
+        'input[name="unlimited"]',
+    ],
+
+    // Fair launch settings - Supply input (visible after unchecking Unlimited)
+    SUPPLY_INPUT: [
+        'input[name="supply"]',
+        'input[placeholder*="supply"]',
+        'input[placeholder*="Supply"]',
+        'label:has-text("Supply") + input',
+        'label:has-text("Supply") ~ input',
+        'div:has-text("Supply") input[type="number"]',
+    ],
+
 };
