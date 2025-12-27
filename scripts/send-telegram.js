@@ -124,6 +124,22 @@ function sendTelegramPhoto(photoPath, caption) {
     });
 }
 
+// Check if screenshot is blank/empty (very small file size indicates blank image)
+function isBlankScreenshot(filePath) {
+    try {
+        const stats = fs.statSync(filePath);
+        // Blank screenshots are usually under 10KB
+        // Real screenshots with content are typically 50KB+
+        if (stats.size < 10000) {
+            console.log(`  Skipping blank screenshot (${(stats.size/1024).toFixed(1)}KB): ${path.basename(filePath)}`);
+            return true;
+        }
+        return false;
+    } catch (err) {
+        return false;
+    }
+}
+
 // Get screenshots based on test status and test file
 function getScreenshots(status, testFile = '', outputDir = '') {
     // Use spec-specific output directory if provided, otherwise use default
@@ -179,7 +195,9 @@ function getScreenshots(status, testFile = '', outputDir = '') {
 
     if (status === 'PASSED') {
         // Only send success/verification screenshots (max 3)
+        // Filter out blank screenshots
         const successScreenshots = sorted.filter(f => {
+            if (isBlankScreenshot(f)) return false;
             const name = path.basename(f).toLowerCase();
             return name.includes('success') ||
                    name.includes('connected') ||
@@ -190,11 +208,13 @@ function getScreenshots(status, testFile = '', outputDir = '') {
                    name.includes('sell-success') ||
                    name.includes('search-result');
         });
-        console.log(`Found ${successScreenshots.length} success screenshots`);
+        console.log(`Found ${successScreenshots.length} success screenshots (after blank filter)`);
         return successScreenshots.slice(0, 3);
     } else {
         // Send ONLY failure screenshots for failed tests
+        // Filter out blank screenshots
         const failScreenshots = sorted.filter(f => {
+            if (isBlankScreenshot(f)) return false;
             const name = path.basename(f).toLowerCase();
             // Only match explicit FAILED screenshots
             return name.startsWith('failed') ||
@@ -204,8 +224,8 @@ function getScreenshots(status, testFile = '', outputDir = '') {
                    name.includes('timeout');
         });
 
-        console.log(`Found ${failScreenshots.length} failure screenshots:`);
-        failScreenshots.forEach(f => console.log(`  - ${path.basename(f)}`));
+        console.log(`Found ${failScreenshots.length} failure screenshots (after blank filter):`);
+        failScreenshots.forEach(f => console.log(`  - ${path.basename(f)} (${(fs.statSync(f).size/1024).toFixed(1)}KB)`));
 
         if (failScreenshots.length > 0) {
             // Return only FAILED screenshots (max 3)
@@ -214,6 +234,7 @@ function getScreenshots(status, testFile = '', outputDir = '') {
             // No explicit fail screenshots - return only the LAST screenshot (likely shows failure state)
             // Filter out success/blank screenshots
             const lastScreenshots = sorted.filter(f => {
+                if (isBlankScreenshot(f)) return false;
                 const name = path.basename(f).toLowerCase();
                 // Exclude success/verification screenshots
                 return !name.includes('success') &&
@@ -305,6 +326,16 @@ function escapeHtml(text) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+// Helper: strip ANSI escape codes from text
+function stripAnsi(text) {
+    if (!text) return '';
+    // Remove ANSI escape codes like [31m, [39m, [0m, etc.
+    return text.toString()
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .replace(/\[[\d;]*m/g, '')
+        .trim();
 }
 
 // Create hyperlink (shorter text for table cells)
@@ -582,7 +613,7 @@ async function main() {
 
                 // Show error if failed
                 if (result.status === 'FAILED' && result.error) {
-                    const errorText = result.error.substring(0, 60).replace(/\n/g, ' ');
+                    const errorText = stripAnsi(result.error).substring(0, 60).replace(/\n/g, ' ');
                     output += `\n   │     └ 💬 <code>${escapeHtml(errorText)}</code>`;
                 } else {
                     output += `\n   │`;
@@ -610,7 +641,7 @@ async function main() {
             message += `\n\n<b>💰 Fixed Price (Fair Launch)</b> ${fairLaunchStatus} (✅${fairLaunchPassed} ❌${fairLaunchFailed})`;
             message += formatModelResults(fairLaunchResults, bondingResults.length + 1);
         }
-    } else if (tokenUrls && testFile.includes('searchMintSell')) {
+    } else if (tokenUrls && testFile.toLowerCase().includes('searchmintsell')) {
         // SEARCH MINT SELL TEST FORMAT - Group by collection type
 
         const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
@@ -656,7 +687,7 @@ async function main() {
 
                 // Show error if failed
                 if (result.status === 'FAILED' && result.error) {
-                    const errorText = result.error.substring(0, 60).replace(/\n/g, ' ');
+                    const errorText = stripAnsi(result.error).substring(0, 60).replace(/\n/g, ' ');
                     output += `\n   │     └ 💬 <code>${escapeHtml(errorText)}</code>`;
                 } else {
                     output += `\n   │`;
