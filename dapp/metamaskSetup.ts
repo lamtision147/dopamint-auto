@@ -18,7 +18,7 @@ export const TEST_FILE_OFFSETS = {
 };
 
 // Delay between each test in milliseconds
-const DELAY_PER_TEST = 30000; // 30 seconds
+const DELAY_PER_TEST = 10000; // 10 seconds between each test
 
 export async function setupMetaMask(testIndex: number = 0, fileOffset: number = 0) {
   // Global test index = fileOffset + testIndex

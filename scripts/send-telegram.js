@@ -29,7 +29,8 @@ function sendTelegramMessage(message) {
         const payload = {
             chat_id: CHAT_ID,
             text: message,
-            parse_mode: 'HTML'
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
         };
         // Add message_thread_id for supergroup topics
         if (THREAD_ID) {
@@ -521,11 +522,12 @@ async function main() {
             const statusTxt = result.status === 'PASSED' ? 'Passed' : 'Failed';
             const modelName = result.model || 'Unknown';
 
-            // Collection with hyperlink - extract ID from URL
+            // Collection with hyperlink - use name if available, else ID
             let collectionLink = '-';
             if (result.collectionUrl) {
                 const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
-                collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+                const linkText = result.collectionName || collectionId;
+                collectionLink = createLinkWithIcon(linkText, result.collectionUrl);
             }
 
             // Minted count (no individual URLs for create test)
@@ -559,11 +561,12 @@ async function main() {
             // Use model mapping for display name
             const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
-            // Collection link - extract ID from URL
+            // Collection link - use name if available, else ID
             let collectionLink = '-';
             if (result.collectionUrl) {
                 const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
-                collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+                const linkText = result.collectionName || collectionId;
+                collectionLink = createLinkWithIcon(linkText, result.collectionUrl);
             }
 
             // Minted URLs with hyperlinks (LINK#1 LINK#2)
