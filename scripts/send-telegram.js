@@ -453,6 +453,14 @@ async function main() {
     const logFile = args[4] || '';
     const outputDir = args[5] || '';  // Spec-specific output directory
 
+    // Debug logging
+    console.log('=== Telegram Script Args ===');
+    console.log(`status: ${status}`);
+    console.log(`testName: ${testName}`);
+    console.log(`testFile: ${testFile}`);
+    console.log(`outputDir: ${outputDir}`);
+    console.log('============================');
+
     const now = new Date();
     const timeStr = now.toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
@@ -513,7 +521,7 @@ async function main() {
     message += `\n────────────────────────`;
 
     // Format based on test type
-    if (testFile.includes('login')) {
+    if (testFile.toLowerCase().includes('login')) {
         // LOGIN TEST FORMAT - Plain text table (copyable)
         // Build table manually without HTML tags inside <pre>
         const w1 = 10, w2 = 8, w3 = 15;
