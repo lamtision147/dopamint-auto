@@ -285,20 +285,72 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;');
 }
 
-// Create hyperlink
+// Create hyperlink (shorter text for table cells)
 function createLink(text, url) {
     if (!url) return text;
     return `<a href="${url}">${escapeHtml(text)}</a>`;
 }
 
-// Format table header
-function formatTableHeader(columns) {
-    return `<b>${columns.join(' │ ')}</b>`;
+// Create hyperlink with link icon
+function createLinkWithIcon(text, url) {
+    if (!url) return text;
+    return `🔗 <a href="${url}">${escapeHtml(text)}</a>`;
 }
 
-// Format table separator
-function formatTableSeparator(length = 40) {
-    return '━'.repeat(length);
+// Extract ID from URL (last part of path)
+function extractIdFromUrl(url) {
+    if (!url) return null;
+    try {
+        const parts = url.split('/').filter(p => p);
+        return parts[parts.length - 1];
+    } catch (e) {
+        return null;
+    }
+}
+
+// Pad string to fixed width (for monospace alignment)
+function padRight(str, width) {
+    const text = str || '';
+    // Count actual display length (excluding HTML tags)
+    const displayLen = text.replace(/<[^>]*>/g, '').length;
+    if (displayLen >= width) return text;
+    return text + ' '.repeat(width - displayLen);
+}
+
+// Pad string to center (for headers)
+function padCenter(str, width) {
+    const text = str || '';
+    const displayLen = text.replace(/<[^>]*>/g, '').length;
+    if (displayLen >= width) return text;
+    const leftPad = Math.floor((width - displayLen) / 2);
+    const rightPad = width - displayLen - leftPad;
+    return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
+}
+
+// Format table row with fixed column widths
+function formatTableRow(columns, widths) {
+    return columns.map((col, i) => padRight(col, widths[i])).join('│');
+}
+
+// Format table header row with fixed column widths
+function formatTableHeaderRow(columns, widths) {
+    const paddedCols = columns.map((col, i) => padCenter(col, widths[i]));
+    return `<b>${paddedCols.join('│')}</b>`;
+}
+
+// Format table separator line with fixed widths
+function formatTableSeparator(widths) {
+    return widths.map(w => '─'.repeat(w)).join('┼');
+}
+
+// Format table top border
+function formatTableTopBorder(widths) {
+    return widths.map(w => '─'.repeat(w)).join('┬');
+}
+
+// Format table bottom border
+function formatTableBottomBorder(widths) {
+    return widths.map(w => '─'.repeat(w)).join('┴');
 }
 
 // Check if any result has failed status
@@ -379,14 +431,18 @@ async function main() {
     const logFile = args[4] || '';
     const outputDir = args[5] || '';  // Spec-specific output directory
 
-    const timestamp = new Date().toLocaleString('vi-VN', {
+    const now = new Date();
+    const timeStr = now.toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
+    });
+    const dateStr = now.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
     });
 
     const emoji = status === 'PASSED' ? '✅' : '❌';
@@ -402,113 +458,145 @@ async function main() {
     // Get create info if exists (for create test)
     const createInfo = getCreateInfo(outputDir);
 
-    let message = `${emoji} <b>DOPAMINT AUTO TEST</b>
-📅 ${timestamp} │ ⏱ ${formattedDuration}
-📁 <code>${testFile}</code>
-${formatTableSeparator(40)}`;
+    // Calculate summary for header (will be filled later based on test type)
+    let passedCount = 0;
+    let failedCount = 0;
+    let totalCount = 0;
+
+    // Pre-calculate counts for summary in header
+    if (createInfo && Array.isArray(createInfo)) {
+        passedCount = createInfo.filter(r => r.status === 'PASSED').length;
+        failedCount = createInfo.filter(r => r.status === 'FAILED').length;
+        totalCount = createInfo.length;
+    } else if (tokenUrls) {
+        const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
+        passedCount = resultsArray.filter(r => r.status === 'PASSED').length;
+        failedCount = resultsArray.filter(r => r.status === 'FAILED').length;
+        totalCount = resultsArray.length;
+    }
+
+    let message = `${emoji} <b>DAILY AUTOMATION TEST</b>
+────────────────────────
+📋 Test     : ${testName}
+📁 File     : <code>${testFile}</code>
+📅 Time     : ${timeStr} ${dateStr}
+📊 Status   : ${emoji} <b>${statusText}</b>
+⏱️ Duration : ${formattedDuration}`;
+
+    // Add summary in header if we have test results
+    if (totalCount > 0) {
+        message += `\n📈 Summary  : ✅ Passed : ${passedCount} | ❌ Failed : ${failedCount}`;
+    }
+
+    message += `\n────────────────────────`;
 
     // Format based on test type
     if (testFile.includes('login')) {
-        // LOGIN TEST FORMAT
-        message += `\n\n${formatTableHeader(['Method', 'Status', 'NOTE'])}`;
-        message += `\n${formatTableSeparator(30)}`;
+        // LOGIN TEST FORMAT - Column widths: Method(10), Status(8), Note(15)
+        const loginWidths = [10, 8, 15];
+        message += `\n<pre>`;
+        message += `\n${formatTableTopBorder(loginWidths)}`;
+        message += `\n${formatTableHeaderRow(['Method', 'Status', 'NOTE'], loginWidths)}`;
+        message += `\n${formatTableSeparator(loginWidths)}`;
 
-        const note = status === 'FAILED' ? 'See error below' : '';
-        message += `\nMetaMask │ ${emoji} ${statusText} │ ${note}`;
+        const note = status === 'FAILED' ? 'See error' : '-';
+        message += `\n${formatTableRow(['MetaMask', statusText, note], loginWidths)}`;
+        message += `\n${formatTableBottomBorder(loginWidths)}`;
+        message += `</pre>`;
 
         // Add error details if test failed
         if (status === 'FAILED' && logFile) {
             const errorDetails = getErrorDetails(logFile);
             if (errorDetails) {
                 const shortError = errorDetails.split('\n')[0].substring(0, 100);
-                message += `\n\n⚠️ <b>Error:</b>\n<code>${shortError}</code>`;
+                message += `\n\n💬 <b>Error:</b>\n<code>${shortError}</code>`;
             }
         }
     } else if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
-        // CREATE TEST FORMAT - Table with hyperlinks
-        message += `\n\n${formatTableHeader(['Model', 'Collection', 'Minted', 'Status', 'NOTE'])}`;
-        message += `\n${formatTableSeparator(50)}`;
+        // CREATE TEST FORMAT - Card style for each model
+        message += `\n`;
 
-        createInfo.forEach((result) => {
-            const statusEmoji = result.status === 'PASSED' ? '✅' : '❌';
+        createInfo.forEach((result, index) => {
+            const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
+            const statusTxt = result.status === 'PASSED' ? 'Passed' : 'Failed';
             const modelName = result.model || 'Unknown';
 
-            if (result.status === 'PASSED') {
-                // Collection with hyperlink
-                const collectionLink = result.collectionUrl
-                    ? createLink('LINK', result.collectionUrl)
-                    : 'N/A';
+            // Collection with hyperlink - extract ID from URL
+            let collectionLink = '-';
+            if (result.collectionUrl) {
+                const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
+                collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+            }
 
-                // Minted count (no individual URLs for create test)
-                const mintedText = `${result.mintedCount || 0} NFTs`;
+            // Minted count (no individual URLs for create test)
+            const mintedText = result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-';
 
-                message += `\n${modelName} │ ${collectionLink} │ ${mintedText} │ ${statusEmoji} │`;
-            } else {
-                // Failed test
-                const errorNote = result.error
-                    ? result.error.substring(0, 50).replace(/\n/g, ' ') + '...'
-                    : 'Error';
-                message += `\n${modelName} │ - │ - │ ${statusEmoji} │ ${escapeHtml(errorNote)}`;
+            message += `\n<b>${statusIcon} ${index + 1}. 🧠${modelName}</b>`;
+            message += `\n   ├ 📦 Collection: ${collectionLink}`;
+            message += `\n   ├ 🎨 Minted: ${mintedText}`;
+            message += `\n   └ 📌 Status: ${statusIcon} ${statusTxt}`;
+
+            // Note - only show error for failed tests
+            if (result.status === 'FAILED' && result.error) {
+                const errorText = result.error.substring(0, 50).replace(/\n/g, ' ');
+                message += `\n   💬 <code>${escapeHtml(errorText)}</code>`;
+            }
+
+            // Add separator between models (except last one)
+            if (index < createInfo.length - 1) {
+                message += `\n────────────────────────`;
             }
         });
-
-        // Summary
-        const passedCount = createInfo.filter(r => r.status === 'PASSED').length;
-        const failedCount = createInfo.filter(r => r.status === 'FAILED').length;
-        message += `\n${formatTableSeparator(50)}`;
-        message += `\n📈 <b>Summary:</b> ${passedCount}/${createInfo.length} passed`;
-        if (failedCount > 0) {
-            message += ` (${failedCount} failed)`;
-        }
     } else if (tokenUrls && testFile.includes('searchMintSell')) {
-        // SEARCH MINT SELL TEST FORMAT - Table with hyperlinks for Minted and Sold
-        message += `\n\n${formatTableHeader(['Model', 'Collection', 'Minted', 'Sold', 'Status', 'NOTE'])}`;
-        message += `\n${formatTableSeparator(55)}`;
+        // SEARCH MINT SELL TEST FORMAT - Card style for each model
+        message += `\n`;
 
         const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
 
-        resultsArray.forEach((result) => {
-            const statusEmoji = result.status === 'PASSED' ? '✅' : '❌';
+        resultsArray.forEach((result, index) => {
+            const statusIcon = result.status === 'PASSED' ? '✅' : '❌';
+            const statusTxt = result.status === 'PASSED' ? 'Passed' : 'Failed';
             // Use model mapping for display name
             const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
-            if (result.status === 'PASSED') {
-                // Collection link (use first minted URL's collection if available)
-                const collectionLink = result.collectionUrl
-                    ? createLink('LINK', result.collectionUrl)
-                    : '-';
+            // Collection link - extract ID from URL
+            let collectionLink = '-';
+            if (result.collectionUrl) {
+                const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
+                collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+            }
 
-                // Minted URLs with hyperlinks (#1, #2, etc)
-                let mintedLinks = '-';
-                if (result.mintedUrls && result.mintedUrls.length > 0) {
-                    mintedLinks = result.mintedUrls
-                        .map((url, i) => createLink(`#${i + 1}`, url))
-                        .join(' ');
-                }
+            // Minted URLs with hyperlinks (LINK#1 LINK#2)
+            let mintedLinks = '-';
+            if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
+                mintedLinks = result.mintedUrls
+                    .map((url, i) => createLinkWithIcon(`LINK#${i + 1}`, url))
+                    .join(' ');
+            }
 
-                // Sold URL with hyperlink
-                const soldLink = result.soldUrl
-                    ? createLink('LINK', result.soldUrl)
-                    : '-';
+            // Sold URL with hyperlink
+            let soldLink = '-';
+            if (result.status === 'PASSED' && result.soldUrl) {
+                soldLink = createLinkWithIcon('LINK', result.soldUrl);
+            }
 
-                message += `\n${modelName} │ ${collectionLink} │ ${mintedLinks} │ ${soldLink} │ ${statusEmoji} │`;
-            } else {
-                // Failed test
-                const errorNote = result.error
-                    ? result.error.substring(0, 40).replace(/\n/g, ' ') + '...'
-                    : 'Error';
-                message += `\n${modelName} │ - │ - │ - │ ${statusEmoji} │ ${escapeHtml(errorNote)}`;
+            message += `\n<b>${statusIcon} ${index + 1}. 🧠${modelName}</b>`;
+            message += `\n   ├ 📦 Collection: ${collectionLink}`;
+            message += `\n   ├ 🎨 Minted: ${mintedLinks}`;
+            message += `\n   ├ 💰 Sold: ${soldLink}`;
+            message += `\n   └ 📌 Status: ${statusIcon} ${statusTxt}`;
+
+            // Note - only show error for failed tests
+            if (result.status === 'FAILED' && result.error) {
+                const errorText = result.error.substring(0, 50).replace(/\n/g, ' ');
+                message += `\n   💬 <code>${escapeHtml(errorText)}</code>`;
+            }
+
+            // Add separator between models (except last one)
+            if (index < resultsArray.length - 1) {
+                message += `\n────────────────────────`;
             }
         });
-
-        // Summary
-        const passedCount = resultsArray.filter(r => r.status === 'PASSED').length;
-        const failedCount = resultsArray.filter(r => r.status === 'FAILED').length;
-        message += `\n${formatTableSeparator(55)}`;
-        message += `\n📈 <b>Summary:</b> ${passedCount}/${resultsArray.length} passed`;
-        if (failedCount > 0) {
-            message += ` (${failedCount} failed)`;
-        }
     } else {
         // DEFAULT FORMAT (for other tests)
         message += `\n\n📊 Status: <b>${statusText}</b>`;
@@ -527,7 +615,7 @@ ${formatTableSeparator(40)}`;
         }
     }
 
-    message += `\n\n🤖 <i>Automated by Playwright</i>`;
+    message += `\n\n🤖 <i>Automated by <a href="https://t.me/VuTran1902">Vu Tran</a></i>`;
 
     try {
         await sendTelegramMessage(message);
