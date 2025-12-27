@@ -1517,6 +1517,134 @@ export class SearchMintSellPage {
         console.log('Sell button on card clicked!');
     }
 
+    // Fair Launch: Hover on first NFT, verify "Sell on" button, click to open OpenSea
+    async hoverOnFirstNFTAndClickSellOnOpenSea(collectionPage: Page, context: BrowserContext): Promise<string> {
+        console.log('\n=== Hover on first NFT and click "Sell on" for OpenSea ===');
+
+        await collectionPage.waitForTimeout(1500);
+
+        // Extract collection address from URL
+        const currentUrl = collectionPage.url();
+        const urlMatch = currentUrl.match(/collections\/([^?\/]+)/);
+        this.collectionAddress = urlMatch ? urlMatch[1] : '';
+        console.log(`Collection address: ${this.collectionAddress}`);
+
+        // Find NFT card in dialog (same logic as hoverOnFirstNFTAndClickSell)
+        const dialogImages = collectionPage.locator('div[role="dialog"] img, [data-state="open"] img');
+        const imgCount = await dialogImages.count();
+        console.log(`Found ${imgCount} images in dialog`);
+
+        let nftCard: Locator | null = null;
+
+        // Find first image that looks like an NFT
+        if (imgCount > 0) {
+            for (let i = 0; i < imgCount; i++) {
+                const img = dialogImages.nth(i);
+                const boundingBox = await img.boundingBox().catch(() => null);
+
+                if (boundingBox && boundingBox.width > 50 && boundingBox.height > 50) {
+                    console.log(`Image ${i}: ${boundingBox.width}x${boundingBox.height}`);
+                    nftCard = img;
+                    break;
+                }
+            }
+        }
+
+        if (!nftCard) {
+            console.log('Warning: NFT card not found');
+            throw new Error('NFT card not found for Fair Launch sell');
+        }
+
+        // Hover on NFT card
+        console.log('Hovering on NFT card...');
+        await nftCard.scrollIntoViewIfNeeded().catch(() => {});
+        await nftCard.hover({ force: true });
+        await collectionPage.waitForTimeout(1500);
+
+        // Find and verify "Sell on" button
+        console.log('Looking for "Sell on" button...');
+
+        const sellOnSelectors = [
+            'button:has-text("Sell on")',
+            'a:has-text("Sell on")',
+            '[class*="sell"]:has-text("Sell on")',
+            'div[role="dialog"] button:has-text("Sell on")',
+        ];
+
+        let sellOnButton: Locator | null = null;
+
+        for (const selector of sellOnSelectors) {
+            try {
+                const btn = collectionPage.locator(selector).first();
+                if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    const buttonText = await btn.textContent();
+                    console.log(`Found button with text: "${buttonText}"`);
+
+                    // Verify button contains "Sell on"
+                    if (buttonText?.includes('Sell on')) {
+                        console.log('✅ Verified: Button shows "Sell on" text');
+                        sellOnButton = btn;
+                        break;
+                    }
+                }
+            } catch (e) {
+                // Continue
+            }
+        }
+
+        if (!sellOnButton) {
+            // Fallback: try getByText
+            const sellOnText = collectionPage.getByText(/Sell on/i).first();
+            if (await sellOnText.isVisible({ timeout: 2000 }).catch(() => false)) {
+                sellOnButton = sellOnText;
+                console.log('Found "Sell on" via getByText');
+            }
+        }
+
+        if (!sellOnButton) {
+            console.log('Warning: "Sell on" button not found');
+            throw new Error('"Sell on" button not found for Fair Launch');
+        }
+
+        // Setup listener for new page (OpenSea tab)
+        console.log('Clicking "Sell on" button and waiting for OpenSea tab...');
+        const newPagePromise = context.waitForEvent('page', { timeout: 30000 });
+
+        // Click the button
+        await sellOnButton.click({ force: true });
+
+        // Wait for new tab to open
+        const openSeaPage = await newPagePromise;
+        await openSeaPage.waitForLoadState('domcontentloaded');
+
+        const openSeaUrl = openSeaPage.url();
+        console.log(`New tab opened: ${openSeaUrl}`);
+
+        // Verify URL contains opensea.io/collection
+        if (openSeaUrl.includes('opensea.io')) {
+            console.log('✅ Verified: URL is OpenSea');
+
+            // Further verify it's a collection page
+            if (openSeaUrl.includes('/collection') || openSeaUrl.includes('/assets')) {
+                console.log('✅ Verified: OpenSea collection/assets page');
+            } else {
+                console.log('⚠️ Warning: URL might not be a collection page');
+            }
+        } else {
+            console.log(`⚠️ Warning: URL is not OpenSea: ${openSeaUrl}`);
+        }
+
+        // Screenshot the OpenSea page
+        await openSeaPage.screenshot({ path: `${outputDir}/opensea-sell-page.png` });
+        console.log('Screenshot saved: opensea-sell-page.png');
+
+        // Close the OpenSea tab after verification
+        await openSeaPage.close();
+        console.log('Closed OpenSea tab');
+
+        return openSeaUrl;
+    }
+
     async clickSellInPopup(collectionPage: Page): Promise<void> {
         console.log('\n=== Click Sell button in popup ===');
 

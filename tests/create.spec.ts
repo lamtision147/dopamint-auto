@@ -181,7 +181,8 @@ async function runCreateFlowWithModel(
         collectionName: collectionName,
         mintedCount: mintedCount,
         status: 'PASSED',
-        collectionUrl: collectionUrl
+        collectionUrl: collectionUrl,
+        collectionType: 'bonding'  // Bonding Curve collection
     };
 
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
@@ -198,7 +199,8 @@ async function runCreateFlowFairLaunch(
     page: Page,
     context: BrowserContext
 ): Promise<{ collectionName: string; mintedCount: number; modelUsed: string }> {
-    const modelUsed = 'Fair Launch';
+    const modelUsed = 'ChatGPT image 1.5';  // Actual AI model used
+    const collectionType = 'fairlaunch';     // Collection type: Fixed Price
 
     // STEP 1: Login with MetaMask
     console.log('\n========== PHASE 1: LOGIN WITH METAMASK ==========');
@@ -266,6 +268,10 @@ async function runCreateFlowFairLaunch(
     const collectionPage = pages[pages.length - 1];
     await collectionPage.waitForLoadState();
 
+    // Get collection URL directly from the page
+    const collectionUrl = collectionPage.url();
+    console.log(`✅ Fair Launch Collection URL: ${collectionUrl}`);
+
     // STEP 6: Mint NFT Flow
     console.log('\n========== PHASE 7: MINT NFT FLOW ==========');
 
@@ -306,24 +312,14 @@ async function runCreateFlowFairLaunch(
     // Save Fair Launch info to separate file
     const modelInfoPath = path.resolve(outputDir, 'create-info-fair-launch.json');
 
-    // Get collection URL
-    const collectionUrlPath = path.resolve(outputDir, 'collection-url-fair-launch.txt');
-    let collectionUrl = '';
-    try {
-        if (fs.existsSync(collectionUrlPath)) {
-            collectionUrl = fs.readFileSync(collectionUrlPath, 'utf8').trim();
-        }
-    } catch (e) {
-        // Ignore
-    }
-
-    // Write result to Fair Launch specific file
+    // Write result to Fair Launch specific file (URL already captured above)
     const result = {
         model: modelUsed,
         collectionName: collectionName,
         mintedCount: mintedCount,
         status: 'PASSED',
-        collectionUrl: collectionUrl
+        collectionUrl: collectionUrl,
+        collectionType: collectionType  // 'fairlaunch' = Fixed Price
     };
 
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
@@ -381,15 +377,20 @@ test.describe('Create NFT Flow', () => {
             }
 
             // Save failed result to model-specific file
-            const safeModelName = model.toLowerCase().replace(/\s+/g, '-');
+            // Determine if this is a Fair Launch test
+            const isFairLaunch = model === 'Fair Launch';
+            const actualModel = isFairLaunch ? 'ChatGPT image 1.5' : model;
+            const safeModelName = isFairLaunch ? 'fair-launch' : model.toLowerCase().replace(/\s+/g, '-');
             const modelInfoPath = path.resolve(outputDir, `create-info-${safeModelName}.json`);
 
             const failedResult = {
-                model: model,
+                model: actualModel,
                 collectionName: 'N/A',
                 mintedCount: 0,
                 status: 'FAILED',
-                error: testInfo.error?.message || 'Unknown error'
+                error: testInfo.error?.message || 'Unknown error',
+                collectionUrl: '',
+                collectionType: isFairLaunch ? 'fairlaunch' : 'bonding'
             };
 
             fs.writeFileSync(modelInfoPath, JSON.stringify(failedResult, null, 2));
@@ -425,7 +426,7 @@ test.describe('Create NFT Flow', () => {
             'create-info-fair-launch.json'
         ];
 
-        const allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string; error?: string}> = [];
+        const allResults: Array<{model: string; collectionName: string; mintedCount: number; status: string; collectionUrl?: string; collectionType?: string; error?: string}> = [];
 
         for (const file of modelFiles) {
             const filePath = path.resolve(outputDir, file);

@@ -13,12 +13,12 @@ const BASE_SEPOLIA_RPC_ENDPOINTS = [
 // Each file has a unique offset to avoid MetaMask conflicts
 export const TEST_FILE_OFFSETS = {
   LOGIN: 0,           // dopamintLogin.spec.ts: 1 test, starts at 0s
-  CREATE: 1,          // create.spec.ts: 5 tests, starts at 30s (30s, 60s, 90s, 120s, 150s)
-  SEARCH_MINT_SELL: 6 // searchMintSell.spec.ts: 4 tests, starts at 180s (180s, 210s, 240s, 270s)
+  CREATE: 1,          // create.spec.ts: 5 tests, starts at 15s (15s, 30s, 45s, 60s, 75s)
+  SEARCH_MINT_SELL: 6 // searchMintSell.spec.ts: 5 tests, starts at 90s (90s, 105s, 120s, 135s, 150s)
 };
 
 // Delay between each test in milliseconds
-const DELAY_PER_TEST = 10000; // 10 seconds between each test
+const DELAY_PER_TEST = 15000; // 15 seconds between each test
 
 export async function setupMetaMask(testIndex: number = 0, fileOffset: number = 0) {
   // Global test index = fileOffset + testIndex

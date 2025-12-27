@@ -14,14 +14,15 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
 // Collection type definition
-type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu testChatGPT';
+type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu testChatGPT' | 'Auto Fairlaunch with ChatGPT 1.5';
 
 // Map collection name to test index for staggered parallel execution
 const COLLECTION_TO_INDEX: Record<string, number> = {
     'Auto Banana - OLD': 0,
     'Auto ChatGPT - OLD': 1,
     'Auto Banana Pro - OLD': 2,
-    'Vu testChatGPT': 3
+    'Vu testChatGPT': 3,
+    'Auto Fairlaunch with ChatGPT 1.5': 4
 };
 
 // Map collection name to model name for display in notifications
@@ -29,7 +30,17 @@ const COLLECTION_TO_MODEL: Record<string, string> = {
     'Auto Banana - OLD': 'Nano Banana',
     'Auto ChatGPT - OLD': 'ChatGPT',
     'Auto Banana Pro - OLD': 'Nano Banana Pro',
-    'Vu testChatGPT': 'ChatGPT image 1.5'
+    'Vu testChatGPT': 'ChatGPT image 1.5',
+    'Auto Fairlaunch with ChatGPT 1.5': 'ChatGPT image 1.5'
+};
+
+// Map collection name to collection type (bonding or fairlaunch)
+const COLLECTION_TO_TYPE: Record<string, string> = {
+    'Auto Banana - OLD': 'bonding',
+    'Auto ChatGPT - OLD': 'bonding',
+    'Auto Banana Pro - OLD': 'bonding',
+    'Vu testChatGPT': 'bonding',
+    'Auto Fairlaunch with ChatGPT 1.5': 'fairlaunch'
 };
 
 export const test = baseTest.extend<{
@@ -63,7 +74,10 @@ async function runSearchMintSellFlow(
     wallet: Dappwright,
     page: Page,
     context: BrowserContext
-): Promise<{ collectionName: string; mintCount: number; mintedUrls: string[]; soldUrl: string }> {
+): Promise<{ collectionName: string; mintCount: number; mintedUrls: string[]; soldUrl: string; collectionType: string }> {
+    // Determine collection type
+    const collectionType = COLLECTION_TO_TYPE[collectionName] || 'bonding';
+    const isFairLaunch = collectionType === 'fairlaunch';
     // ========== PHASE 1: LOGIN WITH METAMASK ==========
     console.log('\n========== PHASE 1: LOGIN WITH METAMASK ==========');
     const dopamintPage = new DopamintLoginPage(context, wallet);
@@ -159,34 +173,69 @@ async function runSearchMintSellFlow(
 
     // ========== PHASE 6: SELL NFT ==========
     console.log('\n========== PHASE 6: SELL NFT ==========');
+    console.log(`Collection type: ${isFairLaunch ? 'Fair Launch (Fixed Price)' : 'Bonding Curve'}`);
 
-    // Click Mint this to open the dialog again
-    await searchMintSellPage.clickMintThis(collectionPage);
+    let soldTokenUrl = '';
 
-    // Click My Collectible tab inside the dialog
-    await searchMintSellPage.clickMyCollectibleTab(collectionPage);
+    if (isFairLaunch) {
+        // ========== FAIR LAUNCH SELL FLOW ==========
+        console.log('Using Fair Launch sell flow (OpenSea)...');
 
-    // Hover on first NFT and click Sell
-    await searchMintSellPage.hoverOnFirstNFTAndClickSell(collectionPage);
+        // Click Mint this to open the dialog again
+        await searchMintSellPage.clickMintThis(collectionPage);
 
-    // Click Sell button in popup
-    await searchMintSellPage.clickSellInPopup(collectionPage);
+        // Click My Collectible tab inside the dialog
+        await searchMintSellPage.clickMyCollectibleTab(collectionPage);
 
-    // Wait for "sold successfully" toast
-    const soldTokenUrl = await searchMintSellPage.waitForSoldSuccessfully(collectionPage);
+        // Hover on first NFT and verify "Sell on" button, then click to open OpenSea
+        const openSeaUrl = await searchMintSellPage.hoverOnFirstNFTAndClickSellOnOpenSea(collectionPage, context);
 
-    // Log sold token URL
-    console.log('\n--- SOLD TOKEN URL ---');
-    if (soldTokenUrl) {
-        console.log(`✅ Sold NFT: ${soldTokenUrl}`);
+        soldTokenUrl = openSeaUrl;
+
+        // Log OpenSea URL
+        console.log('\n--- OPENSEA URL ---');
+        if (openSeaUrl) {
+            console.log(`✅ OpenSea: ${openSeaUrl}`);
+        } else {
+            console.log('⚠️ Could not get OpenSea URL');
+        }
+        console.log('-------------------\n');
+
+        // Screenshot sell page
+        await collectionPage.screenshot({ path: `${outputDir}/sell-opensea-${safeCollectionName}.png` });
+        console.log(`Screenshot saved: sell-opensea-${safeCollectionName}.png`);
     } else {
-        console.log('⚠️ Could not extract sold token URL');
-    }
-    console.log('----------------------\n');
+        // ========== BONDING CURVE SELL FLOW ==========
+        console.log('Using Bonding Curve sell flow...');
 
-    // Screenshot sell success
-    await collectionPage.screenshot({ path: `${outputDir}/sell-success-${safeCollectionName}.png` });
-    console.log(`Screenshot saved: sell-success-${safeCollectionName}.png`);
+        // Click Mint this to open the dialog again
+        await searchMintSellPage.clickMintThis(collectionPage);
+
+        // Click My Collectible tab inside the dialog
+        await searchMintSellPage.clickMyCollectibleTab(collectionPage);
+
+        // Hover on first NFT and click Sell
+        await searchMintSellPage.hoverOnFirstNFTAndClickSell(collectionPage);
+
+        // Click Sell button in popup
+        await searchMintSellPage.clickSellInPopup(collectionPage);
+
+        // Wait for "sold successfully" toast
+        soldTokenUrl = await searchMintSellPage.waitForSoldSuccessfully(collectionPage);
+
+        // Log sold token URL
+        console.log('\n--- SOLD TOKEN URL ---');
+        if (soldTokenUrl) {
+            console.log(`✅ Sold NFT: ${soldTokenUrl}`);
+        } else {
+            console.log('⚠️ Could not extract sold token URL');
+        }
+        console.log('----------------------\n');
+
+        // Screenshot sell success
+        await collectionPage.screenshot({ path: `${outputDir}/sell-success-${safeCollectionName}.png` });
+        console.log(`Screenshot saved: sell-success-${safeCollectionName}.png`);
+    }
 
     console.log('\n========================================');
     console.log('✅ TEST COMPLETED SUCCESSFULLY!');
@@ -206,10 +255,13 @@ async function runSearchMintSellFlow(
 
     // Save result to collection-specific file to avoid race condition in parallel tests
     const tokenInfoPath = path.resolve(outputDir, `token-urls-${safeCollectionName}.json`);
+    const collectionUrl = collectionPage.url();  // Get collection URL from page
     const tokenInfo = {
         mintedUrls: mintedTokenUrls,
         soldUrl: soldTokenUrl || '',
         collectionName: modelName, // Use model name for display in notifications
+        collectionUrl: collectionUrl,
+        collectionType: collectionType,  // 'bonding' or 'fairlaunch'
         mintCount: mintResult.count,
         status: 'PASSED'
     };
@@ -222,7 +274,8 @@ async function runSearchMintSellFlow(
         collectionName,
         mintCount: mintResult.count,
         mintedUrls: mintedTokenUrls,
-        soldUrl: soldTokenUrl || ''
+        soldUrl: soldTokenUrl || '',
+        collectionType: collectionType
     };
 }
 
@@ -245,6 +298,10 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
 
     test('Case 4: Search collection "Vu testChatGPT", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
         await runSearchMintSellFlow('Vu testChatGPT', wallet, page, context);
+    });
+
+    test('Case 5: Search collection "Auto Fairlaunch with ChatGPT 1.5", Mint 2 NFTs, and Sell on OpenSea', async ({ wallet, page, context }) => {
+        await runSearchMintSellFlow('Auto Fairlaunch with ChatGPT 1.5', wallet, page, context);
     });
 
     test.afterEach(async ({ context }, testInfo) => {
@@ -271,11 +328,14 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
 
             // Save failed result
             const modelName = COLLECTION_TO_MODEL[collectionName] || collectionName;
+            const collectionType = COLLECTION_TO_TYPE[collectionName] || 'bonding';
             const tokenInfoPath = path.resolve(outputDir, `token-urls-${safeCollectionName}.json`);
             const failedResult = {
                 mintedUrls: [],
                 soldUrl: '',
                 collectionName: modelName, // Use model name for display in notifications
+                collectionUrl: '',
+                collectionType: collectionType,  // 'bonding' or 'fairlaunch'
                 mintCount: 0,
                 status: 'FAILED',
                 error: testInfo.error?.message || 'Unknown error'
@@ -309,13 +369,16 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
             'token-urls-auto-banana---old.json',
             'token-urls-auto-chatgpt---old.json',
             'token-urls-auto-banana-pro---old.json',
-            'token-urls-vu-testchatgpt.json'
+            'token-urls-vu-testchatgpt.json',
+            'token-urls-auto-fairlaunch-with-chatgpt-15.json'
         ];
 
         const allResults: Array<{
             mintedUrls: string[];
             soldUrl: string;
             collectionName: string;
+            collectionUrl?: string;
+            collectionType?: string;
             mintCount: number;
             status: string;
             error?: string;

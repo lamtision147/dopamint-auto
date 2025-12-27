@@ -193,23 +193,44 @@ function getScreenshots(status, testFile = '', outputDir = '') {
         console.log(`Found ${successScreenshots.length} success screenshots`);
         return successScreenshots.slice(0, 3);
     } else {
-        // Send debug/failure screenshots (max 5 for failed tests)
+        // Send ONLY failure screenshots for failed tests
         const failScreenshots = sorted.filter(f => {
             const name = path.basename(f).toLowerCase();
-            // Match FAILED-ModelName-page-X.png and other failure patterns
+            // Only match explicit FAILED screenshots
             return name.startsWith('failed') ||
                    name.includes('fail') ||
                    name.includes('error') ||
-                   name.includes('debug');
+                   name.includes('debug') ||
+                   name.includes('timeout');
         });
 
         console.log(`Found ${failScreenshots.length} failure screenshots:`);
         failScreenshots.forEach(f => console.log(`  - ${path.basename(f)}`));
 
-        // If no specific fail screenshots, return the most recent ones
-        const result = (failScreenshots.length > 0 ? failScreenshots : sorted).slice(0, 5);
-        console.log(`Returning ${result.length} screenshots for FAILED status`);
-        return result;
+        if (failScreenshots.length > 0) {
+            // Return only FAILED screenshots (max 3)
+            return failScreenshots.slice(0, 3);
+        } else {
+            // No explicit fail screenshots - return only the LAST screenshot (likely shows failure state)
+            // Filter out success/blank screenshots
+            const lastScreenshots = sorted.filter(f => {
+                const name = path.basename(f).toLowerCase();
+                // Exclude success/verification screenshots
+                return !name.includes('success') &&
+                       !name.includes('passed') &&
+                       !name.includes('connected') &&
+                       !name.includes('verify');
+            });
+
+            if (lastScreenshots.length > 0) {
+                // Return only the last 1-2 screenshots
+                console.log(`No FAILED screenshots, returning last ${Math.min(2, lastScreenshots.length)} screenshot(s)`);
+                return lastScreenshots.slice(-2);
+            }
+
+            console.log('No suitable failure screenshots found');
+            return [];
+        }
     }
 }
 
@@ -493,16 +514,25 @@ async function main() {
 
     // Format based on test type
     if (testFile.includes('login')) {
-        // LOGIN TEST FORMAT - Column widths: Method(10), Status(8), Note(15)
-        const loginWidths = [10, 8, 15];
-        message += `\n<pre>`;
-        message += `\n${formatTableTopBorder(loginWidths)}`;
-        message += `\n${formatTableHeaderRow(['Method', 'Status', 'NOTE'], loginWidths)}`;
-        message += `\n${formatTableSeparator(loginWidths)}`;
+        // LOGIN TEST FORMAT - Plain text table (copyable)
+        // Build table manually without HTML tags inside <pre>
+        const w1 = 10, w2 = 8, w3 = 15;
+
+        const topLine    = '─'.repeat(w1) + '┬' + '─'.repeat(w2) + '┬' + '─'.repeat(w3);
+        const midLine    = '─'.repeat(w1) + '┼' + '─'.repeat(w2) + '┼' + '─'.repeat(w3);
+        const bottomLine = '─'.repeat(w1) + '┴' + '─'.repeat(w2) + '┴' + '─'.repeat(w3);
+
+        const header = padCenter('Method', w1) + '│' + padCenter('Status', w2) + '│' + padCenter('NOTE', w3);
 
         const note = status === 'FAILED' ? 'See error' : '-';
-        message += `\n${formatTableRow(['MetaMask', statusText, note], loginWidths)}`;
-        message += `\n${formatTableBottomBorder(loginWidths)}`;
+        const dataRow = padRight('MetaMask', w1) + '│' + padRight(statusText, w2) + '│' + padRight(note, w3);
+
+        message += `\n<pre>`;
+        message += `${topLine}\n`;
+        message += `${header}\n`;
+        message += `${midLine}\n`;
+        message += `${dataRow}\n`;
+        message += `${bottomLine}`;
         message += `</pre>`;
 
         // Add error details if test failed
@@ -514,92 +544,136 @@ async function main() {
             }
         }
     } else if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
-        // CREATE TEST FORMAT - Card style for each model
-        message += `\n`;
+        // CREATE TEST FORMAT - Group by collection type
 
-        createInfo.forEach((result, index) => {
-            const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
-            const statusTxt = result.status === 'PASSED' ? 'Passed' : 'Failed';
-            const modelName = result.model || 'Unknown';
+        // Separate results by collection type
+        const bondingResults = createInfo.filter(r => r.collectionType !== 'fairlaunch');
+        const fairLaunchResults = createInfo.filter(r => r.collectionType === 'fairlaunch');
 
-            // Collection with hyperlink - use name if available, else ID
-            let collectionLink = '-';
-            if (result.collectionUrl) {
-                const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
-                const linkText = result.collectionName || collectionId;
-                collectionLink = createLinkWithIcon(linkText, result.collectionUrl);
-            }
+        // Helper function to format model results within a type
+        function formatModelResults(results, startIndex = 1) {
+            let output = '';
+            results.forEach((result, idx) => {
+                const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
+                const modelName = result.model || 'Unknown';
 
-            // Minted count (no individual URLs for create test)
-            const mintedText = result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-';
+                // Collection with hyperlink
+                let collectionLink = '-';
+                if (result.collectionUrl) {
+                    const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
+                    collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+                }
 
-            message += `\n<b>${statusIcon} ${index + 1}. 🧠${modelName}</b>`;
-            message += `\n   ├ 📦 Collection: ${collectionLink}`;
-            message += `\n   ├ 🎨 Minted: ${mintedText}`;
-            message += `\n   └ 📌 Status: ${statusIcon} ${statusTxt}`;
+                // Minted count
+                const mintedText = result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-';
 
-            // Note - only show error for failed tests
-            if (result.status === 'FAILED' && result.error) {
-                const errorText = result.error.substring(0, 50).replace(/\n/g, ' ');
-                message += `\n   💬 <code>${escapeHtml(errorText)}</code>`;
-            }
+                output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
+                output += `\n   │     ├ 🎨 Minted : ${mintedText}`;
+                output += `\n   │     ├ 🔗 Link : ${collectionLink}`;
 
-            // Add separator between models (except last one)
-            if (index < createInfo.length - 1) {
-                message += `\n────────────────────────`;
-            }
-        });
+                // Show error if failed
+                if (result.status === 'FAILED' && result.error) {
+                    const errorText = result.error.substring(0, 60).replace(/\n/g, ' ');
+                    output += `\n   │     └ 💬 <code>${escapeHtml(errorText)}</code>`;
+                } else {
+                    output += `\n   │`;
+                }
+            });
+            return output;
+        }
+
+        // Show Bonding Curve section if has results
+        if (bondingResults.length > 0) {
+            const bondingPassed = bondingResults.filter(r => r.status === 'PASSED').length;
+            const bondingFailed = bondingResults.filter(r => r.status === 'FAILED').length;
+            const bondingStatus = bondingFailed > 0 ? '🔴' : '🟢';
+
+            message += `\n\n<b>📦 Bonding Curve</b> ${bondingStatus} (✅${bondingPassed} ❌${bondingFailed})`;
+            message += formatModelResults(bondingResults, 1);
+        }
+
+        // Show Fair Launch section if has results
+        if (fairLaunchResults.length > 0) {
+            const fairLaunchPassed = fairLaunchResults.filter(r => r.status === 'PASSED').length;
+            const fairLaunchFailed = fairLaunchResults.filter(r => r.status === 'FAILED').length;
+            const fairLaunchStatus = fairLaunchFailed > 0 ? '🔴' : '🟢';
+
+            message += `\n\n<b>💰 Fixed Price (Fair Launch)</b> ${fairLaunchStatus} (✅${fairLaunchPassed} ❌${fairLaunchFailed})`;
+            message += formatModelResults(fairLaunchResults, bondingResults.length + 1);
+        }
     } else if (tokenUrls && testFile.includes('searchMintSell')) {
-        // SEARCH MINT SELL TEST FORMAT - Card style for each model
-        message += `\n`;
+        // SEARCH MINT SELL TEST FORMAT - Group by collection type
 
         const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
 
-        resultsArray.forEach((result, index) => {
-            const statusIcon = result.status === 'PASSED' ? '✅' : '❌';
-            const statusTxt = result.status === 'PASSED' ? 'Passed' : 'Failed';
-            // Use model mapping for display name
-            const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
+        // Separate results by collection type
+        const bondingResults = resultsArray.filter(r => r.collectionType !== 'fairlaunch');
+        const fairLaunchResults = resultsArray.filter(r => r.collectionType === 'fairlaunch');
 
-            // Collection link - use name if available, else ID
-            let collectionLink = '-';
-            if (result.collectionUrl) {
-                const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
-                const linkText = result.collectionName || collectionId;
-                collectionLink = createLinkWithIcon(linkText, result.collectionUrl);
-            }
+        // Helper function to format model results within a type
+        function formatSearchMintSellResults(results, startIndex = 1) {
+            let output = '';
+            results.forEach((result, idx) => {
+                const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
+                // Use model mapping for display name
+                const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
-            // Minted URLs with hyperlinks (LINK#1 LINK#2)
-            let mintedLinks = '-';
-            if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
-                mintedLinks = result.mintedUrls
-                    .map((url, i) => createLinkWithIcon(`LINK#${i + 1}`, url))
-                    .join(' ');
-            }
+                // Collection with hyperlink
+                let collectionLink = '-';
+                if (result.collectionUrl) {
+                    const collectionId = extractIdFromUrl(result.collectionUrl) || 'LINK';
+                    collectionLink = createLinkWithIcon(collectionId, result.collectionUrl);
+                }
 
-            // Sold URL with hyperlink
-            let soldLink = '-';
-            if (result.status === 'PASSED' && result.soldUrl) {
-                soldLink = createLinkWithIcon('LINK', result.soldUrl);
-            }
+                // Minted URLs with hyperlinks (LINK#1 LINK#2)
+                let mintedLinks = '-';
+                if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
+                    mintedLinks = result.mintedUrls
+                        .map((url, i) => createLinkWithIcon(`#${i + 1}`, url))
+                        .join(' ');
+                }
 
-            message += `\n<b>${statusIcon} ${index + 1}. 🧠${modelName}</b>`;
-            message += `\n   ├ 📦 Collection: ${collectionLink}`;
-            message += `\n   ├ 🎨 Minted: ${mintedLinks}`;
-            message += `\n   ├ 💰 Sold: ${soldLink}`;
-            message += `\n   └ 📌 Status: ${statusIcon} ${statusTxt}`;
+                // Sold URL with hyperlink
+                let soldLink = '-';
+                if (result.status === 'PASSED' && result.soldUrl) {
+                    soldLink = createLinkWithIcon('LINK', result.soldUrl);
+                }
 
-            // Note - only show error for failed tests
-            if (result.status === 'FAILED' && result.error) {
-                const errorText = result.error.substring(0, 50).replace(/\n/g, ' ');
-                message += `\n   💬 <code>${escapeHtml(errorText)}</code>`;
-            }
+                output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
+                output += `\n   │     ├ 🎨 Minted : ${mintedLinks}`;
+                output += `\n   │     ├ 💵 Sold : ${soldLink}`;
+                output += `\n   │     ├ 🔗 Collection : ${collectionLink}`;
 
-            // Add separator between models (except last one)
-            if (index < resultsArray.length - 1) {
-                message += `\n────────────────────────`;
-            }
-        });
+                // Show error if failed
+                if (result.status === 'FAILED' && result.error) {
+                    const errorText = result.error.substring(0, 60).replace(/\n/g, ' ');
+                    output += `\n   │     └ 💬 <code>${escapeHtml(errorText)}</code>`;
+                } else {
+                    output += `\n   │`;
+                }
+            });
+            return output;
+        }
+
+        // Show Bonding Curve section if has results
+        if (bondingResults.length > 0) {
+            const bondingPassed = bondingResults.filter(r => r.status === 'PASSED').length;
+            const bondingFailed = bondingResults.filter(r => r.status === 'FAILED').length;
+            const bondingStatus = bondingFailed > 0 ? '🔴' : '🟢';
+
+            message += `\n\n<b>📦 Bonding Curve</b> ${bondingStatus} (✅${bondingPassed} ❌${bondingFailed})`;
+            message += formatSearchMintSellResults(bondingResults, 1);
+        }
+
+        // Show Fair Launch section if has results
+        if (fairLaunchResults.length > 0) {
+            const fairLaunchPassed = fairLaunchResults.filter(r => r.status === 'PASSED').length;
+            const fairLaunchFailed = fairLaunchResults.filter(r => r.status === 'FAILED').length;
+            const fairLaunchStatus = fairLaunchFailed > 0 ? '🔴' : '🟢';
+
+            message += `\n\n<b>💰 Fixed Price (Fair Launch)</b> ${fairLaunchStatus} (✅${fairLaunchPassed} ❌${fairLaunchFailed})`;
+            message += formatSearchMintSellResults(fairLaunchResults, bondingResults.length + 1);
+        }
     } else {
         // DEFAULT FORMAT (for other tests)
         message += `\n\n📊 Status: <b>${statusText}</b>`;
