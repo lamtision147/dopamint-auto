@@ -650,7 +650,7 @@ async function main() {
         const bondingResults = resultsArray.filter(r => r.collectionType !== 'fairlaunch');
         const fairLaunchResults = resultsArray.filter(r => r.collectionType === 'fairlaunch');
 
-        // Helper function to format model results within a type (same format as create)
+        // Helper function to format model results within a type
         function formatSearchMintSellResults(results, startIndex = 1) {
             let output = '';
             results.forEach((result, idx) => {
@@ -658,10 +658,21 @@ async function main() {
                 // Use model mapping for display name
                 const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
-                // Minted count (same format as create)
-                const mintedText = result.status === 'PASSED' ? `${result.mintCount || 0} NFT` : '-';
+                // Minted URLs with hyperlinks (#1 #2)
+                let mintedLinks = '-';
+                if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
+                    mintedLinks = result.mintedUrls
+                        .map((url, i) => `<a href="${url}">#${i + 1}</a>`)
+                        .join(' ');
+                }
 
-                // Collection name with hyperlink (same format as create)
+                // Sold URL with hyperlink
+                let soldLink = '-';
+                if (result.status === 'PASSED' && result.soldUrl) {
+                    soldLink = `<a href="${result.soldUrl}">View</a>`;
+                }
+
+                // Collection name with hyperlink
                 let collectionLink = '-';
                 if (result.collectionUrl && result.collectionName) {
                     collectionLink = `<a href="${result.collectionUrl}">${escapeHtml(result.collectionName)}</a>`;
@@ -670,7 +681,8 @@ async function main() {
                 }
 
                 output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
-                output += `\n   │     ├ 🎨 Minted : ${mintedText}`;
+                output += `\n   │     ├ 🎨 Minted : ${mintedLinks}`;
+                output += `\n   │     ├ 💵 Sold : ${soldLink}`;
                 output += `\n   │     ├ 📦 Collection : ${collectionLink}`;
 
                 // Show error if failed
