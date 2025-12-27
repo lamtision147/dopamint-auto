@@ -650,7 +650,7 @@ async function main() {
         const bondingResults = resultsArray.filter(r => r.collectionType !== 'fairlaunch');
         const fairLaunchResults = resultsArray.filter(r => r.collectionType === 'fairlaunch');
 
-        // Helper function to format model results within a type
+        // Helper function to format model results within a type (same format as create)
         function formatSearchMintSellResults(results, startIndex = 1) {
             let output = '';
             results.forEach((result, idx) => {
@@ -658,7 +658,10 @@ async function main() {
                 // Use model mapping for display name
                 const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
 
-                // Collection name with hyperlink (use collectionName which is model name)
+                // Minted count (same format as create)
+                const mintedText = result.status === 'PASSED' ? `${result.mintCount || 0} NFT` : '-';
+
+                // Collection name with hyperlink (same format as create)
                 let collectionLink = '-';
                 if (result.collectionUrl && result.collectionName) {
                     collectionLink = `<a href="${result.collectionUrl}">${escapeHtml(result.collectionName)}</a>`;
@@ -666,23 +669,8 @@ async function main() {
                     collectionLink = `<a href="${result.collectionUrl}">View Collection</a>`;
                 }
 
-                // Minted URLs with hyperlinks (LINK#1 LINK#2)
-                let mintedLinks = '-';
-                if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
-                    mintedLinks = result.mintedUrls
-                        .map((url, i) => `<a href="${url}">#${i + 1}</a>`)
-                        .join(' ');
-                }
-
-                // Sold URL with hyperlink
-                let soldLink = '-';
-                if (result.status === 'PASSED' && result.soldUrl) {
-                    soldLink = `<a href="${result.soldUrl}">View</a>`;
-                }
-
                 output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
-                output += `\n   │     ├ 🎨 Minted : ${mintedLinks}`;
-                output += `\n   │     ├ 💵 Sold : ${soldLink}`;
+                output += `\n   │     ├ 🎨 Minted : ${mintedText}`;
                 output += `\n   │     ├ 📦 Collection : ${collectionLink}`;
 
                 // Show error if failed
