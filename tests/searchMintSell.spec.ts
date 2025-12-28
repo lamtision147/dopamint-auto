@@ -260,7 +260,9 @@ async function runSearchMintSellFlow(
     const tokenInfo = {
         mintedUrls: mintedTokenUrls,
         soldUrl: soldTokenUrl || '',
-        collectionName: modelName, // Use model name for display in notifications
+        model: modelName, // Model name for display (e.g., "Nano Banana Pro")
+        actualCollectionName: collectionName, // Actual collection name (e.g., "Auto Banana - OLD")
+        collectionName: modelName, // Keep for backward compatibility
         collectionUrl: collectionUrl,
         collectionType: collectionType,  // 'bonding' or 'fairlaunch'
         mintCount: mintResult.count,
@@ -334,7 +336,9 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
             const failedResult = {
                 mintedUrls: [],
                 soldUrl: '',
-                collectionName: modelName, // Use model name for display in notifications
+                model: modelName, // Model name for display (e.g., "Nano Banana Pro")
+                actualCollectionName: collectionName, // Actual collection name (e.g., "Auto Banana - OLD")
+                collectionName: modelName, // Keep for backward compatibility
                 collectionUrl: '',
                 collectionType: collectionType,  // 'bonding' or 'fairlaunch'
                 mintCount: 0,

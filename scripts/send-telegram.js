@@ -583,14 +583,14 @@ async function main() {
             }
         }
     } else if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
-        // CREATE TEST FORMAT - Table format like Login
+        // CREATE TEST FORMAT - Table format with full content
 
         // Separate results by collection type
         const bondingResults = createInfo.filter(r => r.collectionType !== 'fairlaunch');
         const fairLaunchResults = createInfo.filter(r => r.collectionType === 'fairlaunch');
 
-        // Column widths for CREATE table
-        const cw = { model: 14, collection: 18, minted: 7, status: 7, note: 25 };
+        // Column widths for CREATE table (increased for full content)
+        const cw = { model: 20, collection: 26, minted: 8, status: 8 };
 
         // Helper function to build table for a collection type
         function buildCreateTable(results, title, statusIcon) {
@@ -601,30 +601,41 @@ async function main() {
             table += `\n<pre>`;
 
             // Top line
-            table += '─'.repeat(cw.model) + '┬' + '─'.repeat(cw.collection) + '┬' + '─'.repeat(cw.minted) + '┬' + '─'.repeat(cw.status) + '┬' + '─'.repeat(cw.note) + '\n';
+            table += '─'.repeat(cw.model) + '┬' + '─'.repeat(cw.collection) + '┬' + '─'.repeat(cw.minted) + '┬' + '─'.repeat(cw.status) + '\n';
 
             // Header
-            table += padCenter('Model AI', cw.model) + '│' + padCenter('Collection', cw.collection) + '│' + padCenter('Minted', cw.minted) + '│' + padCenter('Status', cw.status) + '│' + padCenter('Note', cw.note) + '\n';
+            table += padCenter('Model AI', cw.model) + '│' + padCenter('Collection', cw.collection) + '│' + padCenter('Minted', cw.minted) + '│' + padCenter('Status', cw.status) + '\n';
 
             // Mid line
-            table += '─'.repeat(cw.model) + '┼' + '─'.repeat(cw.collection) + '┼' + '─'.repeat(cw.minted) + '┼' + '─'.repeat(cw.status) + '┼' + '─'.repeat(cw.note) + '\n';
+            table += '─'.repeat(cw.model) + '┼' + '─'.repeat(cw.collection) + '┼' + '─'.repeat(cw.minted) + '┼' + '─'.repeat(cw.status) + '\n';
 
             // Data rows
-            results.forEach((result) => {
-                const model = (result.model || 'Unknown').substring(0, cw.model);
-                const collection = (result.collectionName || '-').substring(0, cw.collection);
-                const minted = result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-';
-                const statusTxt = result.status === 'PASSED' ? '✅Pass' : '❌Fail';
-                const note = result.status === 'FAILED' && result.error
-                    ? stripAnsi(result.error).substring(0, cw.note).replace(/\n/g, ' ')
-                    : '-';
+            const errors = [];
+            results.forEach((result, idx) => {
+                const model = padRight(result.model || 'Unknown', cw.model);
+                const collection = padRight(result.collectionName || '-', cw.collection);
+                const minted = padCenter(result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-', cw.minted);
+                const statusTxt = padCenter(result.status === 'PASSED' ? '✅Pass' : '❌Fail', cw.status);
 
-                table += padRight(model, cw.model) + '│' + padRight(collection, cw.collection) + '│' + padCenter(minted, cw.minted) + '│' + padCenter(statusTxt, cw.status) + '│' + padRight(note, cw.note) + '\n';
+                table += model + '│' + collection + '│' + minted + '│' + statusTxt + '\n';
+
+                // Collect errors for display below table
+                if (result.status === 'FAILED' && result.error) {
+                    errors.push({ model: result.model || 'Unknown', error: stripAnsi(result.error).replace(/\n/g, ' ') });
+                }
             });
 
             // Bottom line
-            table += '─'.repeat(cw.model) + '┴' + '─'.repeat(cw.collection) + '┴' + '─'.repeat(cw.minted) + '┴' + '─'.repeat(cw.status) + '┴' + '─'.repeat(cw.note);
+            table += '─'.repeat(cw.model) + '┴' + '─'.repeat(cw.collection) + '┴' + '─'.repeat(cw.minted) + '┴' + '─'.repeat(cw.status);
             table += '</pre>';
+
+            // Add errors section if any
+            if (errors.length > 0) {
+                table += '\n\n💬 <b>Errors:</b>';
+                errors.forEach(e => {
+                    table += `\n• <b>${escapeHtml(e.model)}</b>: <code>${escapeHtml(e.error)}</code>`;
+                });
+            }
 
             return table;
         }
@@ -641,7 +652,7 @@ async function main() {
             message += buildCreateTable(fairLaunchResults, '💰 Fixed Price (Fair Launch)', fairLaunchStatus);
         }
     } else if (tokenUrls && testFile.toLowerCase().includes('searchmintsell')) {
-        // SEARCH MINT SELL TEST FORMAT - Table format like Login
+        // SEARCH MINT SELL TEST FORMAT - Table format with full content
 
         const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
 
@@ -656,8 +667,8 @@ async function main() {
             return match ? match[1] : '';
         }
 
-        // Column widths for SEARCH_MINT_SELL table
-        const sw = { model: 12, collection: 16, minted: 14, sold: 10, status: 7, note: 20 };
+        // Column widths for SEARCH_MINT_SELL table (increased for full content)
+        const sw = { model: 20, collection: 22, minted: 14, sold: 10, status: 8 };
 
         // Helper function to build table for a collection type
         function buildSearchMintSellTable(results, title, statusIcon) {
@@ -668,18 +679,24 @@ async function main() {
             table += `\n<pre>`;
 
             // Top line
-            table += '─'.repeat(sw.model) + '┬' + '─'.repeat(sw.collection) + '┬' + '─'.repeat(sw.minted) + '┬' + '─'.repeat(sw.sold) + '┬' + '─'.repeat(sw.status) + '┬' + '─'.repeat(sw.note) + '\n';
+            table += '─'.repeat(sw.model) + '┬' + '─'.repeat(sw.collection) + '┬' + '─'.repeat(sw.minted) + '┬' + '─'.repeat(sw.sold) + '┬' + '─'.repeat(sw.status) + '\n';
 
             // Header
-            table += padCenter('Model AI', sw.model) + '│' + padCenter('Collection', sw.collection) + '│' + padCenter('Minted', sw.minted) + '│' + padCenter('Sold', sw.sold) + '│' + padCenter('Status', sw.status) + '│' + padCenter('Note', sw.note) + '\n';
+            table += padCenter('Model AI', sw.model) + '│' + padCenter('Collection', sw.collection) + '│' + padCenter('Minted', sw.minted) + '│' + padCenter('Sold', sw.sold) + '│' + padCenter('Status', sw.status) + '\n';
 
             // Mid line
-            table += '─'.repeat(sw.model) + '┼' + '─'.repeat(sw.collection) + '┼' + '─'.repeat(sw.minted) + '┼' + '─'.repeat(sw.sold) + '┼' + '─'.repeat(sw.status) + '┼' + '─'.repeat(sw.note) + '\n';
+            table += '─'.repeat(sw.model) + '┼' + '─'.repeat(sw.collection) + '┼' + '─'.repeat(sw.minted) + '┼' + '─'.repeat(sw.sold) + '┼' + '─'.repeat(sw.status) + '\n';
 
             // Data rows
+            const errors = [];
             results.forEach((result) => {
-                const model = (getModelName(result.collectionName) || result.collectionName || 'Unknown').substring(0, sw.model);
-                const collection = (result.collectionName || '-').substring(0, sw.collection);
+                // Use new 'model' field, fallback to collectionName for backward compatibility
+                const modelName = result.model || getModelName(result.collectionName) || result.collectionName || 'Unknown';
+                // Use actualCollectionName for real collection name, fallback to collectionName
+                const collectionNameDisplay = result.actualCollectionName || result.collectionName || '-';
+
+                const model = padRight(modelName, sw.model);
+                const collection = padRight(collectionNameDisplay, sw.collection);
 
                 // Minted: extract nft_ids from URLs
                 let minted = '-';
@@ -695,17 +712,27 @@ async function main() {
                     sold = soldId ? `id=${soldId}` : 'Sold';
                 }
 
-                const statusTxt = result.status === 'PASSED' ? '✅Pass' : '❌Fail';
-                const note = result.status === 'FAILED' && result.error
-                    ? stripAnsi(result.error).substring(0, sw.note).replace(/\n/g, ' ')
-                    : '-';
+                const statusTxt = padCenter(result.status === 'PASSED' ? '✅Pass' : '❌Fail', sw.status);
 
-                table += padRight(model, sw.model) + '│' + padRight(collection, sw.collection) + '│' + padCenter(minted.substring(0, sw.minted), sw.minted) + '│' + padCenter(sold.substring(0, sw.sold), sw.sold) + '│' + padCenter(statusTxt, sw.status) + '│' + padRight(note, sw.note) + '\n';
+                table += model + '│' + collection + '│' + padCenter(minted, sw.minted) + '│' + padCenter(sold, sw.sold) + '│' + statusTxt + '\n';
+
+                // Collect errors for display below table
+                if (result.status === 'FAILED' && result.error) {
+                    errors.push({ model: modelName, error: stripAnsi(result.error).replace(/\n/g, ' ') });
+                }
             });
 
             // Bottom line
-            table += '─'.repeat(sw.model) + '┴' + '─'.repeat(sw.collection) + '┴' + '─'.repeat(sw.minted) + '┴' + '─'.repeat(sw.sold) + '┴' + '─'.repeat(sw.status) + '┴' + '─'.repeat(sw.note);
+            table += '─'.repeat(sw.model) + '┴' + '─'.repeat(sw.collection) + '┴' + '─'.repeat(sw.minted) + '┴' + '─'.repeat(sw.sold) + '┴' + '─'.repeat(sw.status);
             table += '</pre>';
+
+            // Add errors section if any
+            if (errors.length > 0) {
+                table += '\n\n💬 <b>Errors:</b>';
+                errors.forEach(e => {
+                    table += `\n• <b>${escapeHtml(e.model)}</b>: <code>${escapeHtml(e.error)}</code>`;
+                });
+            }
 
             return table;
         }
