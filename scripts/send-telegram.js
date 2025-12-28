@@ -583,66 +583,65 @@ async function main() {
             }
         }
     } else if (createInfo && testFile.includes('create') && Array.isArray(createInfo)) {
-        // CREATE TEST FORMAT - Group by collection type
+        // CREATE TEST FORMAT - Table format like Login
 
         // Separate results by collection type
         const bondingResults = createInfo.filter(r => r.collectionType !== 'fairlaunch');
         const fairLaunchResults = createInfo.filter(r => r.collectionType === 'fairlaunch');
 
-        // Helper function to format model results within a type
-        function formatModelResults(results, startIndex = 1) {
-            let output = '';
-            results.forEach((result, idx) => {
-                const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
-                const modelName = result.model || 'Unknown';
+        // Column widths for CREATE table
+        const cw = { model: 14, collection: 18, minted: 7, status: 7, note: 25 };
 
-                // Collection name with hyperlink
-                let collectionLink = '-';
-                if (result.collectionUrl && result.collectionName) {
-                    collectionLink = `<a href="${result.collectionUrl}">${escapeHtml(result.collectionName)}</a>`;
-                } else if (result.collectionUrl) {
-                    collectionLink = `<a href="${result.collectionUrl}">View Collection</a>`;
-                }
+        // Helper function to build table for a collection type
+        function buildCreateTable(results, title, statusIcon) {
+            const passedCount = results.filter(r => r.status === 'PASSED').length;
+            const failedCount = results.filter(r => r.status === 'FAILED').length;
 
-                // Minted count
-                const mintedText = result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-';
+            let table = `\n\n<b>${title}</b> ${statusIcon} (✅${passedCount} ❌${failedCount})`;
+            table += `\n<pre>`;
 
-                output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
-                output += `\n   │     ├ 🎨 Minted : ${mintedText}`;
-                output += `\n   │     ├ 📦 Collection : ${collectionLink}`;
+            // Top line
+            table += '─'.repeat(cw.model) + '┬' + '─'.repeat(cw.collection) + '┬' + '─'.repeat(cw.minted) + '┬' + '─'.repeat(cw.status) + '┬' + '─'.repeat(cw.note) + '\n';
 
-                // Show error if failed
-                if (result.status === 'FAILED' && result.error) {
-                    const errorText = stripAnsi(result.error).substring(0, 60).replace(/\n/g, ' ');
-                    output += `\n   │     └ 💬 <code>${escapeHtml(errorText)}</code>`;
-                } else {
-                    output += `\n   │`;
-                }
+            // Header
+            table += padCenter('Model AI', cw.model) + '│' + padCenter('Collection', cw.collection) + '│' + padCenter('Minted', cw.minted) + '│' + padCenter('Status', cw.status) + '│' + padCenter('Note', cw.note) + '\n';
+
+            // Mid line
+            table += '─'.repeat(cw.model) + '┼' + '─'.repeat(cw.collection) + '┼' + '─'.repeat(cw.minted) + '┼' + '─'.repeat(cw.status) + '┼' + '─'.repeat(cw.note) + '\n';
+
+            // Data rows
+            results.forEach((result) => {
+                const model = (result.model || 'Unknown').substring(0, cw.model);
+                const collection = (result.collectionName || '-').substring(0, cw.collection);
+                const minted = result.status === 'PASSED' ? `${result.mintedCount || 0} NFT` : '-';
+                const statusTxt = result.status === 'PASSED' ? '✅Pass' : '❌Fail';
+                const note = result.status === 'FAILED' && result.error
+                    ? stripAnsi(result.error).substring(0, cw.note).replace(/\n/g, ' ')
+                    : '-';
+
+                table += padRight(model, cw.model) + '│' + padRight(collection, cw.collection) + '│' + padCenter(minted, cw.minted) + '│' + padCenter(statusTxt, cw.status) + '│' + padRight(note, cw.note) + '\n';
             });
-            return output;
+
+            // Bottom line
+            table += '─'.repeat(cw.model) + '┴' + '─'.repeat(cw.collection) + '┴' + '─'.repeat(cw.minted) + '┴' + '─'.repeat(cw.status) + '┴' + '─'.repeat(cw.note);
+            table += '</pre>';
+
+            return table;
         }
 
-        // Show Bonding Curve section if has results
+        // Show Bonding Curve table if has results
         if (bondingResults.length > 0) {
-            const bondingPassed = bondingResults.filter(r => r.status === 'PASSED').length;
-            const bondingFailed = bondingResults.filter(r => r.status === 'FAILED').length;
-            const bondingStatus = bondingFailed > 0 ? '🔴' : '🟢';
-
-            message += `\n\n<b>📦 Bonding Curve</b> ${bondingStatus} (✅${bondingPassed} ❌${bondingFailed})`;
-            message += formatModelResults(bondingResults, 1);
+            const bondingStatus = bondingResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
+            message += buildCreateTable(bondingResults, '📦 Bonding Curve', bondingStatus);
         }
 
-        // Show Fair Launch section if has results
+        // Show Fair Launch table if has results
         if (fairLaunchResults.length > 0) {
-            const fairLaunchPassed = fairLaunchResults.filter(r => r.status === 'PASSED').length;
-            const fairLaunchFailed = fairLaunchResults.filter(r => r.status === 'FAILED').length;
-            const fairLaunchStatus = fairLaunchFailed > 0 ? '🔴' : '🟢';
-
-            message += `\n\n<b>💰 Fixed Price (Fair Launch)</b> ${fairLaunchStatus} (✅${fairLaunchPassed} ❌${fairLaunchFailed})`;
-            message += formatModelResults(fairLaunchResults, bondingResults.length + 1);
+            const fairLaunchStatus = fairLaunchResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
+            message += buildCreateTable(fairLaunchResults, '💰 Fixed Price (Fair Launch)', fairLaunchStatus);
         }
     } else if (tokenUrls && testFile.toLowerCase().includes('searchmintsell')) {
-        // SEARCH MINT SELL TEST FORMAT - Group by collection type
+        // SEARCH MINT SELL TEST FORMAT - Table format like Login
 
         const resultsArray = Array.isArray(tokenUrls) ? tokenUrls : [tokenUrls];
 
@@ -650,70 +649,77 @@ async function main() {
         const bondingResults = resultsArray.filter(r => r.collectionType !== 'fairlaunch');
         const fairLaunchResults = resultsArray.filter(r => r.collectionType === 'fairlaunch');
 
-        // Helper function to format model results within a type
-        function formatSearchMintSellResults(results, startIndex = 1) {
-            let output = '';
-            results.forEach((result, idx) => {
-                const statusIcon = result.status === 'PASSED' ? '🟢' : '🔴';
-                // Use model mapping for display name
-                const modelName = getModelName(result.collectionName) || result.collectionName || 'Unknown';
+        // Helper to extract nft_id from URL
+        function extractNftId(url) {
+            if (!url) return '';
+            const match = url.match(/nft_id=(\d+)/);
+            return match ? match[1] : '';
+        }
 
-                // Minted URLs with hyperlinks (#1 #2)
-                let mintedLinks = '-';
+        // Column widths for SEARCH_MINT_SELL table
+        const sw = { model: 12, collection: 16, minted: 14, sold: 10, status: 7, note: 20 };
+
+        // Helper function to build table for a collection type
+        function buildSearchMintSellTable(results, title, statusIcon) {
+            const passedCount = results.filter(r => r.status === 'PASSED').length;
+            const failedCount = results.filter(r => r.status === 'FAILED').length;
+
+            let table = `\n\n<b>${title}</b> ${statusIcon} (✅${passedCount} ❌${failedCount})`;
+            table += `\n<pre>`;
+
+            // Top line
+            table += '─'.repeat(sw.model) + '┬' + '─'.repeat(sw.collection) + '┬' + '─'.repeat(sw.minted) + '┬' + '─'.repeat(sw.sold) + '┬' + '─'.repeat(sw.status) + '┬' + '─'.repeat(sw.note) + '\n';
+
+            // Header
+            table += padCenter('Model AI', sw.model) + '│' + padCenter('Collection', sw.collection) + '│' + padCenter('Minted', sw.minted) + '│' + padCenter('Sold', sw.sold) + '│' + padCenter('Status', sw.status) + '│' + padCenter('Note', sw.note) + '\n';
+
+            // Mid line
+            table += '─'.repeat(sw.model) + '┼' + '─'.repeat(sw.collection) + '┼' + '─'.repeat(sw.minted) + '┼' + '─'.repeat(sw.sold) + '┼' + '─'.repeat(sw.status) + '┼' + '─'.repeat(sw.note) + '\n';
+
+            // Data rows
+            results.forEach((result) => {
+                const model = (getModelName(result.collectionName) || result.collectionName || 'Unknown').substring(0, sw.model);
+                const collection = (result.collectionName || '-').substring(0, sw.collection);
+
+                // Minted: extract nft_ids from URLs
+                let minted = '-';
                 if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
-                    mintedLinks = result.mintedUrls
-                        .map((url, i) => `<a href="${url}">#${i + 1}</a>`)
-                        .join(' ');
+                    const nftIds = result.mintedUrls.map(url => extractNftId(url)).filter(id => id);
+                    minted = nftIds.length > 0 ? nftIds.map(id => `id=${id}`).join(',') : `${result.mintedUrls.length} NFT`;
                 }
 
-                // Sold URL with hyperlink
-                let soldLink = '-';
+                // Sold: extract nft_id from URL
+                let sold = '-';
                 if (result.status === 'PASSED' && result.soldUrl) {
-                    soldLink = `<a href="${result.soldUrl}">View</a>`;
+                    const soldId = extractNftId(result.soldUrl);
+                    sold = soldId ? `id=${soldId}` : 'Sold';
                 }
 
-                // Collection name with hyperlink
-                let collectionLink = '-';
-                if (result.collectionUrl && result.collectionName) {
-                    collectionLink = `<a href="${result.collectionUrl}">${escapeHtml(result.collectionName)}</a>`;
-                } else if (result.collectionUrl) {
-                    collectionLink = `<a href="${result.collectionUrl}">View Collection</a>`;
-                }
+                const statusTxt = result.status === 'PASSED' ? '✅Pass' : '❌Fail';
+                const note = result.status === 'FAILED' && result.error
+                    ? stripAnsi(result.error).substring(0, sw.note).replace(/\n/g, ' ')
+                    : '-';
 
-                output += `\n   │  ${statusIcon} ${startIndex + idx}. 🧠${modelName}`;
-                output += `\n   │     ├ 🎨 Minted : ${mintedLinks}`;
-                output += `\n   │     ├ 💵 Sold : ${soldLink}`;
-                output += `\n   │     ├ 📦 Collection : ${collectionLink}`;
-
-                // Show error if failed
-                if (result.status === 'FAILED' && result.error) {
-                    const errorText = stripAnsi(result.error).substring(0, 60).replace(/\n/g, ' ');
-                    output += `\n   │     └ 💬 <code>${escapeHtml(errorText)}</code>`;
-                } else {
-                    output += `\n   │`;
-                }
+                table += padRight(model, sw.model) + '│' + padRight(collection, sw.collection) + '│' + padCenter(minted.substring(0, sw.minted), sw.minted) + '│' + padCenter(sold.substring(0, sw.sold), sw.sold) + '│' + padCenter(statusTxt, sw.status) + '│' + padRight(note, sw.note) + '\n';
             });
-            return output;
+
+            // Bottom line
+            table += '─'.repeat(sw.model) + '┴' + '─'.repeat(sw.collection) + '┴' + '─'.repeat(sw.minted) + '┴' + '─'.repeat(sw.sold) + '┴' + '─'.repeat(sw.status) + '┴' + '─'.repeat(sw.note);
+            table += '</pre>';
+
+            return table;
         }
 
-        // Show Bonding Curve section if has results
+        // Show Bonding Curve table if has results
         if (bondingResults.length > 0) {
-            const bondingPassed = bondingResults.filter(r => r.status === 'PASSED').length;
-            const bondingFailed = bondingResults.filter(r => r.status === 'FAILED').length;
-            const bondingStatus = bondingFailed > 0 ? '🔴' : '🟢';
-
-            message += `\n\n<b>📦 Bonding Curve</b> ${bondingStatus} (✅${bondingPassed} ❌${bondingFailed})`;
-            message += formatSearchMintSellResults(bondingResults, 1);
+            const bondingStatus = bondingResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
+            message += buildSearchMintSellTable(bondingResults, '📦 Bonding Curve', bondingStatus);
         }
 
-        // Show Fair Launch section if has results
+        // Show Fair Launch table if has results
         if (fairLaunchResults.length > 0) {
-            const fairLaunchPassed = fairLaunchResults.filter(r => r.status === 'PASSED').length;
-            const fairLaunchFailed = fairLaunchResults.filter(r => r.status === 'FAILED').length;
-            const fairLaunchStatus = fairLaunchFailed > 0 ? '🔴' : '🟢';
-
-            message += `\n\n<b>💰 Fixed Price (Fair Launch)</b> ${fairLaunchStatus} (✅${fairLaunchPassed} ❌${fairLaunchFailed})`;
-            message += formatSearchMintSellResults(fairLaunchResults, bondingResults.length + 1);
+            const fairLaunchStatus = fairLaunchResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
+            message += buildSearchMintSellTable(fairLaunchResults, '💰 Fixed Price (Fair Launch)', fairLaunchStatus);
         }
     } else {
         // DEFAULT FORMAT (for other tests)
