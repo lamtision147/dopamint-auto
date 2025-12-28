@@ -537,7 +537,7 @@ async function main() {
     }
 
     let message = `${emoji} <b>DAILY AUTOMATION TEST</b>
-────────────────────────
+===================
 📋 Test     : ${testName}
 📁 File     : <code>${testFile}</code>
 📅 Time     : ${timeStr} ${dateStr}
@@ -549,7 +549,7 @@ async function main() {
         message += `\n📈 Summary  : ✅ Passed : ${passedCount} | ❌ Failed : ${failedCount}`;
     }
 
-    message += `\n────────────────────────`;
+    message += `\n===================`;
 
     // Format based on test type
     if (testFile.toLowerCase().includes('login')) {
