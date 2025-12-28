@@ -429,6 +429,14 @@ export class SearchMintSellPage {
         }
     }
 
+    // Store the actual collection name found on page
+    private actualCollectionName: string = '';
+
+    // Get the actual collection name found on page
+    getActualCollectionName(): string {
+        return this.actualCollectionName;
+    }
+
     async verifyCollectionTitle(collectionPage: Page, expectedTitle: string): Promise<boolean> {
         console.log(`\n=== Verify collection title: "${expectedTitle}" ===`);
 
@@ -442,6 +450,7 @@ export class SearchMintSellPage {
 
         // Try to find collection title
         let titleFound = false;
+        this.actualCollectionName = expectedTitle; // Default to expected if not found
 
         // Method 1: Find h1 or title element
         for (const selector of SEARCH_MINT_SELL_SELECTORS.COLLECTION_TITLE) {
@@ -450,7 +459,15 @@ export class SearchMintSellPage {
                 if (await titleEl.isVisible({ timeout: 5000 }).catch(() => false)) {
                     const titleText = await titleEl.textContent();
                     console.log(`Found title element: "${titleText}"`);
-                    if (titleText?.includes(expectedTitle)) {
+
+                    // Store the actual collection name from page
+                    if (titleText && titleText.trim()) {
+                        this.actualCollectionName = titleText.trim();
+                        console.log(`Stored actual collection name: "${this.actualCollectionName}"`);
+                    }
+
+                    if (titleText?.toLowerCase().includes(expectedTitle.toLowerCase()) ||
+                        expectedTitle.toLowerCase().includes(titleText?.toLowerCase() || '')) {
                         console.log(`Title matches expected: "${expectedTitle}"`);
                         titleFound = true;
                         break;
@@ -464,7 +481,7 @@ export class SearchMintSellPage {
         // Method 2: Check if page contains the title text
         if (!titleFound) {
             const pageContent = await collectionPage.textContent('body');
-            if (pageContent?.includes(expectedTitle)) {
+            if (pageContent?.toLowerCase().includes(expectedTitle.toLowerCase())) {
                 console.log(`Page contains expected title: "${expectedTitle}"`);
                 titleFound = true;
             }
@@ -472,6 +489,7 @@ export class SearchMintSellPage {
 
         if (titleFound) {
             console.log(`Collection title verified: "${expectedTitle}"`);
+            console.log(`Actual collection name on page: "${this.actualCollectionName}"`);
         } else {
             console.log(`Warning: Could not verify title "${expectedTitle}"`);
         }

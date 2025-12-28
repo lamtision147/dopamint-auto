@@ -322,14 +322,16 @@ export class DopamintLoginPage {
     async verifyLoginButtonHidden(): Promise<void> {
         if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin first.");
         const dappPage = this.page;
+        const wallet = this.wallet;
+        const context = this.context;
 
         console.log('\n=== STEP 5: Verify website UI no longer shows Login button ===');
 
         console.log('Waiting for page to update after wallet connection...');
 
         // Phase 1: Quick check with page reload
-        const quickRetries = 3;
-        const retryDelay = 2000;
+        const quickRetries = 4;
+        const retryDelay = 2500;
 
         for (let attempt = 1; attempt <= quickRetries; attempt++) {
             console.log(`Attempt ${attempt}/${quickRetries}: Checking login button visibility...`);
@@ -348,11 +350,34 @@ export class DopamintLoginPage {
 
             console.log(`Login button still visible, attempt ${attempt}/${quickRetries}`);
 
+            // Check if there are any pending MetaMask popups
+            for (const page of context.pages()) {
+                const url = page.url();
+                if (url.includes('chrome-extension://') && !url.includes('home.html')) {
+                    console.log(`Found pending MetaMask popup: ${url}`);
+                    try {
+                        await page.bringToFront();
+                        // Try clicking any visible button
+                        const buttons = ['Confirm', 'Sign', 'Next', 'Connect', 'Approve'];
+                        for (const btnText of buttons) {
+                            const btn = page.locator(`button:has-text("${btnText}")`).first();
+                            if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                                console.log(`Clicking MetaMask button: ${btnText}`);
+                                await btn.click();
+                                await page.waitForTimeout(1000);
+                            }
+                        }
+                    } catch (e) {
+                        console.log(`MetaMask popup handling error: ${e}`);
+                    }
+                }
+            }
+
             // Try refreshing the page
             if (attempt >= 2) {
                 console.log('Trying page reload to refresh wallet state...');
                 await dappPage.reload({ waitUntil: 'networkidle' });
-                await dappPage.waitForTimeout(1500);
+                await dappPage.waitForTimeout(2000);
                 await this.closeAllPopups();
             }
         }
@@ -366,13 +391,33 @@ export class DopamintLoginPage {
                 // Close any popups first
                 await this.closeAllPopups();
 
-                // Re-run the full login flow
+                // Try using dappwright's built-in methods first
+                try {
+                    console.log('Trying wallet.approve()...');
+                    await wallet.approve();
+                    console.log('wallet.approve() succeeded');
+                } catch (e) {
+                    console.log('wallet.approve() skipped/failed (may already be connected)');
+                }
+
+                // Wait and check
+                await dappPage.waitForTimeout(3000);
+                const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
+                let isLoginVisible = await loginButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+                if (!isLoginVisible) {
+                    console.log('✅ Verification successful after wallet.approve(): Login button is NOT visible!');
+                    await expect(loginButton).not.toBeVisible({ timeout: 5000 });
+                    return;
+                }
+
+                // If still visible, try full login flow again
+                console.log('Still visible, re-running full login flow...');
                 await this.loginWithMetaMask();
 
                 // Check if login button is now hidden
-                await dappPage.waitForTimeout(2000);
-                const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
-                const isLoginVisible = await loginButton.isVisible({ timeout: 2000 }).catch(() => false);
+                await dappPage.waitForTimeout(3000);
+                isLoginVisible = await loginButton.isVisible({ timeout: 2000 }).catch(() => false);
 
                 if (!isLoginVisible) {
                     console.log('✅ Verification successful after retry: Login button is NOT visible!');

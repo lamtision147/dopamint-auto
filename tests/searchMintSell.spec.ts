@@ -105,6 +105,10 @@ async function runSearchMintSellFlow(
     // Verify collection title
     const titleVerified = await searchMintSellPage.verifyCollectionTitle(collectionPage, collectionName);
 
+    // Get the actual collection name found on page
+    const actualCollectionName = searchMintSellPage.getActualCollectionName();
+    console.log(`Actual collection name from page: "${actualCollectionName}"`);
+
     if (titleVerified) {
         console.log(`✅ Collection title "${collectionName}" verified!`);
     } else {
@@ -261,7 +265,7 @@ async function runSearchMintSellFlow(
         mintedUrls: mintedTokenUrls,
         soldUrl: soldTokenUrl || '',
         model: modelName, // Model name for display (e.g., "Nano Banana Pro")
-        actualCollectionName: collectionName, // Actual collection name (e.g., "Auto Banana - OLD")
+        actualCollectionName: actualCollectionName, // Actual collection name from page (verified)
         collectionName: modelName, // Keep for backward compatibility
         collectionUrl: collectionUrl,
         collectionType: collectionType,  // 'bonding' or 'fairlaunch'
