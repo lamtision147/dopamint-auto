@@ -667,11 +667,13 @@ async function main() {
             return match ? match[1] : '';
         }
 
-        // Column widths for SEARCH_MINT_SELL table (increased for full content)
-        const sw = { model: 20, collection: 22, minted: 14, sold: 10, status: 8 };
+        // Column widths for Bonding Curve table (with Sold column)
+        const bw = { model: 20, collection: 20, minted: 14, sold: 10, status: 8 };
+        // Column widths for Fair Launch table (no Sold column, wider collection)
+        const fw = { model: 20, collection: 32, minted: 14, status: 8 };
 
-        // Helper function to build table for a collection type
-        function buildSearchMintSellTable(results, title, statusIcon) {
+        // Helper function to build Bonding Curve table (with Sold column)
+        function buildBondingTable(results, title, statusIcon) {
             const passedCount = results.filter(r => r.status === 'PASSED').length;
             const failedCount = results.filter(r => r.status === 'FAILED').length;
 
@@ -679,24 +681,22 @@ async function main() {
             table += `\n<pre>`;
 
             // Top line
-            table += '─'.repeat(sw.model) + '┬' + '─'.repeat(sw.collection) + '┬' + '─'.repeat(sw.minted) + '┬' + '─'.repeat(sw.sold) + '┬' + '─'.repeat(sw.status) + '\n';
+            table += '─'.repeat(bw.model) + '┬' + '─'.repeat(bw.collection) + '┬' + '─'.repeat(bw.minted) + '┬' + '─'.repeat(bw.sold) + '┬' + '─'.repeat(bw.status) + '\n';
 
             // Header
-            table += padCenter('Model AI', sw.model) + '│' + padCenter('Collection', sw.collection) + '│' + padCenter('Minted', sw.minted) + '│' + padCenter('Sold', sw.sold) + '│' + padCenter('Status', sw.status) + '\n';
+            table += padCenter('Model AI', bw.model) + '│' + padCenter('Collection', bw.collection) + '│' + padCenter('Minted', bw.minted) + '│' + padCenter('Sold', bw.sold) + '│' + padCenter('Status', bw.status) + '\n';
 
             // Mid line
-            table += '─'.repeat(sw.model) + '┼' + '─'.repeat(sw.collection) + '┼' + '─'.repeat(sw.minted) + '┼' + '─'.repeat(sw.sold) + '┼' + '─'.repeat(sw.status) + '\n';
+            table += '─'.repeat(bw.model) + '┼' + '─'.repeat(bw.collection) + '┼' + '─'.repeat(bw.minted) + '┼' + '─'.repeat(bw.sold) + '┼' + '─'.repeat(bw.status) + '\n';
 
             // Data rows
             const errors = [];
             results.forEach((result) => {
-                // Use new 'model' field, fallback to collectionName for backward compatibility
                 const modelName = result.model || getModelName(result.collectionName) || result.collectionName || 'Unknown';
-                // Use actualCollectionName for real collection name, fallback to collectionName
                 const collectionNameDisplay = result.actualCollectionName || result.collectionName || '-';
 
-                const model = padRight(modelName, sw.model);
-                const collection = padRight(collectionNameDisplay, sw.collection);
+                const model = padRight(modelName, bw.model);
+                const collection = padRight(collectionNameDisplay, bw.collection);
 
                 // Minted: extract nft_ids from URLs
                 let minted = '-';
@@ -712,21 +712,19 @@ async function main() {
                     sold = soldId ? `id=${soldId}` : 'Sold';
                 }
 
-                const statusTxt = padCenter(result.status === 'PASSED' ? '✅Pass' : '❌Fail', sw.status);
+                const statusTxt = padCenter(result.status === 'PASSED' ? '✅Pass' : '❌Fail', bw.status);
 
-                table += model + '│' + collection + '│' + padCenter(minted, sw.minted) + '│' + padCenter(sold, sw.sold) + '│' + statusTxt + '\n';
+                table += model + '│' + collection + '│' + padCenter(minted, bw.minted) + '│' + padCenter(sold, bw.sold) + '│' + statusTxt + '\n';
 
-                // Collect errors for display below table
                 if (result.status === 'FAILED' && result.error) {
                     errors.push({ model: modelName, error: stripAnsi(result.error).replace(/\n/g, ' ') });
                 }
             });
 
             // Bottom line
-            table += '─'.repeat(sw.model) + '┴' + '─'.repeat(sw.collection) + '┴' + '─'.repeat(sw.minted) + '┴' + '─'.repeat(sw.sold) + '┴' + '─'.repeat(sw.status);
+            table += '─'.repeat(bw.model) + '┴' + '─'.repeat(bw.collection) + '┴' + '─'.repeat(bw.minted) + '┴' + '─'.repeat(bw.sold) + '┴' + '─'.repeat(bw.status);
             table += '</pre>';
 
-            // Add errors section if any
             if (errors.length > 0) {
                 table += '\n\n💬 <b>Errors:</b>';
                 errors.forEach(e => {
@@ -737,16 +735,73 @@ async function main() {
             return table;
         }
 
-        // Show Bonding Curve table if has results
-        if (bondingResults.length > 0) {
-            const bondingStatus = bondingResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
-            message += buildSearchMintSellTable(bondingResults, '📦 Bonding Curve', bondingStatus);
+        // Helper function to build Fair Launch table (NO Sold column)
+        function buildFairLaunchTable(results, title, statusIcon) {
+            const passedCount = results.filter(r => r.status === 'PASSED').length;
+            const failedCount = results.filter(r => r.status === 'FAILED').length;
+
+            let table = `\n\n<b>${title}</b> ${statusIcon} (✅${passedCount} ❌${failedCount})`;
+            table += `\n<pre>`;
+
+            // Top line (no Sold column)
+            table += '─'.repeat(fw.model) + '┬' + '─'.repeat(fw.collection) + '┬' + '─'.repeat(fw.minted) + '┬' + '─'.repeat(fw.status) + '\n';
+
+            // Header (no Sold column)
+            table += padCenter('Model AI', fw.model) + '│' + padCenter('Collection', fw.collection) + '│' + padCenter('Minted', fw.minted) + '│' + padCenter('Status', fw.status) + '\n';
+
+            // Mid line (no Sold column)
+            table += '─'.repeat(fw.model) + '┼' + '─'.repeat(fw.collection) + '┼' + '─'.repeat(fw.minted) + '┼' + '─'.repeat(fw.status) + '\n';
+
+            // Data rows
+            const errors = [];
+            results.forEach((result) => {
+                const modelName = result.model || getModelName(result.collectionName) || result.collectionName || 'Unknown';
+                const collectionNameDisplay = result.actualCollectionName || result.collectionName || '-';
+
+                const model = padRight(modelName, fw.model);
+                const collection = padRight(collectionNameDisplay, fw.collection);
+
+                // Minted: extract nft_ids from URLs
+                let minted = '-';
+                if (result.status === 'PASSED' && result.mintedUrls && result.mintedUrls.length > 0) {
+                    const nftIds = result.mintedUrls.map(url => extractNftId(url)).filter(id => id);
+                    minted = nftIds.length > 0 ? nftIds.map(id => `id=${id}`).join(',') : `${result.mintedUrls.length} NFT`;
+                }
+
+                const statusTxt = padCenter(result.status === 'PASSED' ? '✅Pass' : '❌Fail', fw.status);
+
+                // No Sold column for Fair Launch
+                table += model + '│' + collection + '│' + padCenter(minted, fw.minted) + '│' + statusTxt + '\n';
+
+                if (result.status === 'FAILED' && result.error) {
+                    errors.push({ model: modelName, error: stripAnsi(result.error).replace(/\n/g, ' ') });
+                }
+            });
+
+            // Bottom line (no Sold column)
+            table += '─'.repeat(fw.model) + '┴' + '─'.repeat(fw.collection) + '┴' + '─'.repeat(fw.minted) + '┴' + '─'.repeat(fw.status);
+            table += '</pre>';
+
+            if (errors.length > 0) {
+                table += '\n\n💬 <b>Errors:</b>';
+                errors.forEach(e => {
+                    table += `\n• <b>${escapeHtml(e.model)}</b>: <code>${escapeHtml(e.error)}</code>`;
+                });
+            }
+
+            return table;
         }
 
-        // Show Fair Launch table if has results
+        // Show Bonding Curve table if has results (with Sold column)
+        if (bondingResults.length > 0) {
+            const bondingStatus = bondingResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
+            message += buildBondingTable(bondingResults, '📦 Bonding Curve', bondingStatus);
+        }
+
+        // Show Fair Launch table if has results (NO Sold column)
         if (fairLaunchResults.length > 0) {
             const fairLaunchStatus = fairLaunchResults.some(r => r.status === 'FAILED') ? '🔴' : '🟢';
-            message += buildSearchMintSellTable(fairLaunchResults, '💰 Fixed Price (Fair Launch)', fairLaunchStatus);
+            message += buildFairLaunchTable(fairLaunchResults, '💰 Fixed Price (Fair Launch)', fairLaunchStatus);
         }
     } else {
         // DEFAULT FORMAT (for other tests)
