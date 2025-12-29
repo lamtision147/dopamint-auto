@@ -437,13 +437,26 @@ export class SearchMintSellPage {
         return this.actualCollectionName;
     }
 
-    async verifyCollectionTitle(collectionPage: Page, expectedTitle: string): Promise<boolean> {
+    async verifyCollectionTitle(collectionPage: Page, expectedTitle: string, expectedCollectionUrl?: string): Promise<boolean> {
         console.log(`\n=== Verify collection title: "${expectedTitle}" ===`);
+        if (expectedCollectionUrl) {
+            console.log(`=== Verify collection URL: "${expectedCollectionUrl}" ===`);
+        }
 
         await collectionPage.waitForTimeout(1500);
 
         // Extract and store collection address from URL
         const currentUrl = collectionPage.url();
+        console.log(`Current URL: ${currentUrl}`);
+
+        if (expectedCollectionUrl) {
+            if (currentUrl.includes(expectedCollectionUrl) || expectedCollectionUrl.includes(currentUrl)) {
+                console.log(`✅ Collection URL verified matches expected: ${expectedCollectionUrl}`);
+            } else {
+                console.log(`⚠️ Warning: Current URL ${currentUrl} does not match expected ${expectedCollectionUrl}`);
+            }
+        }
+
         const urlMatch = currentUrl.match(/collections\/([^?\/]+)/);
         this.collectionAddressStored = urlMatch ? urlMatch[1] : '';
         console.log(`Collection address: ${this.collectionAddressStored}`);

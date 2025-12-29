@@ -16,6 +16,15 @@ const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 // Collection type definition
 type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu testChatGPT' | 'Auto Fairlaunch with ChatGPT 1.5';
 
+// Map collection name to search text
+const COLLECTION_TO_SEARCH_TEXT: Record<string, string> = {
+    'Auto Banana - OLD': 'Banana - OLD',
+    'Auto ChatGPT - OLD': 'ChatGPT - OLD',
+    'Auto Banana Pro - OLD': 'Banana Pro',
+    'Vu testChatGPT': 'ChatGPT 1.5',
+    'Auto Fairlaunch with ChatGPT 1.5': 'ChatGPT 1.5'
+};
+
 // Map collection name to test index for staggered parallel execution
 const COLLECTION_TO_INDEX: Record<string, number> = {
     'Auto Banana - OLD': 0,
@@ -73,7 +82,8 @@ async function runSearchMintSellFlow(
     collectionName: CollectionType,
     wallet: Dappwright,
     page: Page,
-    context: BrowserContext
+    context: BrowserContext,
+    expectedCollectionUrl: string
 ): Promise<{ collectionName: string; mintCount: number; mintedUrls: string[]; soldUrl: string; collectionType: string }> {
     // Determine collection type
     const collectionType = COLLECTION_TO_TYPE[collectionName] || 'bonding';
@@ -90,20 +100,22 @@ async function runSearchMintSellFlow(
 
     // ========== PHASE 2: SEARCH FOR COLLECTION ==========
     console.log('\n========== PHASE 2: SEARCH FOR COLLECTION ==========');
-    console.log(`🔍 Searching for collection: ${collectionName}`);
+    // Use mapped search text or default to collection name
+    const searchText = COLLECTION_TO_SEARCH_TEXT[collectionName] || collectionName;
+    console.log(`🔍 Searching for collection: ${collectionName} with text "${searchText}"`);
     const searchMintSellPage = new SearchMintSellPage(context, wallet, dappPage);
 
     // Click Search button on header
     await searchMintSellPage.clickSearchButton();
 
     // Search for collection and navigate to details
-    const collectionPage = await searchMintSellPage.searchAndSelectCollection(collectionName);
+    const collectionPage = await searchMintSellPage.searchAndSelectCollection(searchText);
 
     // ========== PHASE 3: VERIFY COLLECTION TITLE ==========
     console.log('\n========== PHASE 3: VERIFY COLLECTION TITLE ==========');
 
     // Verify collection title
-    const titleVerified = await searchMintSellPage.verifyCollectionTitle(collectionPage, collectionName);
+    const titleVerified = await searchMintSellPage.verifyCollectionTitle(collectionPage, collectionName, expectedCollectionUrl);
 
     // Get the actual collection name found on page
     const actualCollectionName = searchMintSellPage.getActualCollectionName();
@@ -292,23 +304,23 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
     test.describe.configure({ timeout: 600000, mode: 'parallel' });
 
     test('Case 1: Search collection "Auto Banana - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto Banana - OLD', wallet, page, context);
+        await runSearchMintSellFlow('Auto Banana - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x60E22057b9150772367f02F35c8072BA9EdE793c');
     });
 
     test('Case 2: Search collection "Auto ChatGPT - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto ChatGPT - OLD', wallet, page, context);
+        await runSearchMintSellFlow('Auto ChatGPT - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x2E012B074d69aE6fC652C9999973E4cB1502DbBB');
     });
 
     test('Case 3: Search collection "Auto Banana Pro - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto Banana Pro - OLD', wallet, page, context);
+        await runSearchMintSellFlow('Auto Banana Pro - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x4F6fb0f7fCE2B3f83A8bd255E49d15Bc6610cede');
     });
 
     test('Case 4: Search collection "Vu testChatGPT", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Vu testChatGPT', wallet, page, context);
+        await runSearchMintSellFlow('Vu testChatGPT', wallet, page, context, 'https://dev.dopamint.ai/collections/0xB2fC471737a802c37368f2B24A1e0B7f6953fC46');
     });
 
     test('Case 5: Search collection "Auto Fairlaunch with ChatGPT 1.5", Mint 2 NFTs, and Sell on OpenSea', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto Fairlaunch with ChatGPT 1.5', wallet, page, context);
+        await runSearchMintSellFlow('Auto Fairlaunch with ChatGPT 1.5', wallet, page, context, 'https://dev.dopamint.ai/collections/0xFDaC323Ad425FaC41C478B24Cf465f5ef95C9B86');
     });
 
     test.afterEach(async ({ context }, testInfo) => {
