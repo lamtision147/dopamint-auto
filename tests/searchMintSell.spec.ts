@@ -14,16 +14,15 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
 // Collection type definition
-type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu testChatGPT' | 'Auto Fairlaunch with ChatGPT 1.5';
+type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu test ChatGPT 1.5' | 'Auto Fairlaunch with ChatGPT 1.5';
 
 // Map collection name to search text
 const COLLECTION_TO_SEARCH_TEXT: Record<string, string> = {
     'Auto Banana - OLD': 'Banana - OLD',
     'Auto ChatGPT - OLD': 'ChatGPT - OLD',
-    'Auto Banana Pro - OLD': 'Banana Pro',
-    'Vu testChatGPT': 'ChatGPT 1.5',
-    'Auto Fairlaunch with ChatGPT 1.5': 'ChatGPT 1.5'
-};
+    'Auto Banana Pro - OLD': 'Banana Pro - OLD',
+    'Vu test ChatGPT 1.5': 'ChatGPT 1.5',
+    'Auto Fairlaunch with ChatGPT 1.5': 'Auto Fairlaunchwith ChatGPT 1.5'};
 
 // Map collection name to test index for staggered parallel execution
 const COLLECTION_TO_INDEX: Record<string, number> = {
@@ -62,12 +61,15 @@ export const test = baseTest.extend<{
         const collectionMatch = testInfo.title.match(/collection "(.+)"/);
         const collection = collectionMatch ? collectionMatch[1] : 'Auto Banana - OLD';
         const index = COLLECTION_TO_INDEX[collection] ?? 0;
+        //const index = 0; // Sửa số này thành 0 để chạy NGAY LẬP TỨC
         await use(index);
     },
 
     context: async ({ testIndex }, use) => {
         // Use SEARCH_MINT_SELL file offset for staggered parallel execution across all test files
+
         const { wallet, context } = await setupMetaMask(testIndex, TEST_FILE_OFFSETS.SEARCH_MINT_SELL);
+        //const { wallet, context } = await setupMetaMask(0, 0);
         await use(context);
     },
 
@@ -315,8 +317,8 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
         await runSearchMintSellFlow('Auto Banana Pro - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x4F6fb0f7fCE2B3f83A8bd255E49d15Bc6610cede');
     });
 
-    test('Case 4: Search collection "Vu testChatGPT", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Vu testChatGPT', wallet, page, context, 'https://dev.dopamint.ai/collections/0xB2fC471737a802c37368f2B24A1e0B7f6953fC46');
+    test('Case 4: Search collection "Vu test ChatGPT 1.5", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
+        await runSearchMintSellFlow('Vu test ChatGPT 1.5', wallet, page, context, 'https://dev.dopamint.ai/collections/0xB2fC471737a802c37368f2B24A1e0B7f6953fC46');
     });
 
     test('Case 5: Search collection "Auto Fairlaunch with ChatGPT 1.5", Mint 2 NFTs, and Sell on OpenSea', async ({ wallet, page, context }) => {

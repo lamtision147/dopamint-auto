@@ -141,292 +141,99 @@ export class SearchMintSellPage {
         }
     }
 
-    async searchAndSelectCollection(searchText: string): Promise<Page> {
-        console.log(`\n=== Search for "${searchText}" and select ===`);
+async searchAndSelectCollection(searchText: string, targetUrl?: string): Promise<Page> {
+        console.log(`\n=== Search for "${searchText}" ===`);
+        
+        // 1. Nhập liệu
+        const searchInput = this.page.locator('input[placeholder*="Search"], input[type="search"]').first();
+        const finalInput = (await searchInput.isVisible().catch(() => false)) ? searchInput : this.page.locator('input:visible').first();
+        await finalInput.clear();
+        await finalInput.fill(searchText);
+        console.log(`Entered: "${searchText}"`);
 
-        await this.page.waitForTimeout(500);
-
-        // Find and fill search input
-        let searchInput: Locator | null = null;
-        for (const selector of SEARCH_MINT_SELL_SELECTORS.SEARCH_INPUT) {
-            try {
-                const input = this.page.locator(selector).first();
-                if (await input.isVisible({ timeout: 3000 }).catch(() => false)) {
-                    searchInput = input;
-                    console.log(`Found search input with selector: ${selector}`);
-                    break;
-                }
-            } catch (e) {
-                // Continue
-            }
+        // 2. Chờ Popup xuất hiện
+        console.log('Waiting for results dialog...');
+        const dialog = this.page.locator('[role="dialog"]');
+        try {
+            await dialog.waitFor({ state: 'visible', timeout: 10000 });
+            // Chờ thêm để list render xong text
+            await this.page.waitForTimeout(3000); 
+        } catch (e) { 
+            console.log('⚠️ Dialog wait timed out...'); 
         }
 
-        // Fallback: find any visible input
-        if (!searchInput) {
-            searchInput = this.page.locator('input:visible').first();
-        }
-
-        if (!searchInput) {
-            throw new Error('Search input not found');
-        }
-
-        // Type search text
-        await searchInput.fill(searchText);
-        console.log(`Entered search text: "${searchText}"`);
-
-        // Wait for dropdown/search results to appear
-        console.log('Waiting for search results dropdown...');
-        await this.page.waitForTimeout(2000);
-
-        // Screenshot search results dropdown BEFORE clicking
-        await this.page.screenshot({ path: `${outputDir}/search-result.png` });
-        console.log('Screenshot saved: search-result.png (search dropdown)');
-
-        // DEBUG: Log all visible elements that could be search results
-        console.log('\n=== DEBUG: Analyzing search result elements ===');
-
-        // Check for any links on the page
-        const allLinks = this.page.locator('a');
-        const linkCount = await allLinks.count();
-        console.log(`Total links on page: ${linkCount}`);
-
-        // Look for elements containing search-related classes
-        const resultContainers = [
-            '[class*="result"]',
-            '[class*="dropdown"]',
-            '[class*="popover"]',
-            '[class*="suggestion"]',
-            '[class*="autocomplete"]',
-            '[class*="menu"]',
-            '[class*="list"]',
-            '[role="listbox"]',
-            '[role="menu"]',
-        ];
-
-        for (const container of resultContainers) {
-            const elements = this.page.locator(container);
-            const count = await elements.count();
-            if (count > 0) {
-                console.log(`Found ${count} elements matching: ${container}`);
-                // Log first few for debugging
-                for (let i = 0; i < Math.min(count, 3); i++) {
-                    const text = await elements.nth(i).textContent().catch(() => 'N/A');
-                    const isVisible = await elements.nth(i).isVisible().catch(() => false);
-                    console.log(`  [${i}] visible=${isVisible}, text="${text?.substring(0, 50)}..."`);
-                }
-            }
-        }
-        console.log('=== END DEBUG ===\n');
-
-        // Setup listener for new page before clicking
+        // Setup listener cho trang mới (nếu có)
         const newPagePromise = this.context.waitForEvent('page', { timeout: 30000 }).catch(() => null);
 
-        let resultClicked = false;
+        // 3. TÌM KIẾM THÔNG MINH (SHORTEST MATCH)
+        const elements = dialog.locator('div, a, button, span, p').filter({ hasText: /\S/ }); 
+        const count = await elements.count();
+        
+        const cleanKeyword = searchText.toLowerCase().replace(/[\W_]+/g, '');
+        let candidates: { el: any, text: string, length: number }[] = [];
 
-        // Method 1: Find collection link that MATCHES the search text
-        // Search for links containing the search text (case-insensitive partial match)
-        const searchLower = searchText.toLowerCase();
+        for (let i = 0; i < count; i++) {
+            const item = elements.nth(i);
+            if (!(await item.isVisible())) continue;
 
-        // Build selectors specifically for this search text
-        const specificSelectors = [
-            `a:has-text("${searchText}")`,
-            `[role="option"]:has-text("${searchText}")`,
-            `[class*="result"] a`,
-            `[class*="dropdown"] a`,
-            `[class*="suggestion"] a`,
-            'a[href*="collection"]',
-        ];
+            const text = await item.innerText().catch(() => '');
+            if (!text || text.length < 5) continue;
 
-        for (const selector of specificSelectors) {
+            const cleanText = text.toLowerCase().replace(/[\W_]+/g, '');
+
+            // Nếu text khớp
+            if (cleanText.includes(cleanKeyword) || cleanKeyword.includes(cleanText)) {
+                // Kiểm tra Address nếu có targetUrl
+                if (targetUrl) {
+                    const href = await item.getAttribute('href').catch(() => '') || 
+                                 await item.locator('xpath=..').getAttribute('href').catch(() => '');
+                    const addressMatch = targetUrl.match(/(0x[a-fA-F0-9]{40})/i);
+                    const targetAddress = addressMatch ? addressMatch[0].toLowerCase() : '';
+                    // Nếu tìm thấy href có address nhưng không khớp target -> Bỏ qua
+                    if (targetAddress && href && !href.toLowerCase().includes(targetAddress)) {
+                        continue; 
+                    }
+                }
+                candidates.push({ el: item, text: text, length: cleanText.length });
+            }
+        }
+
+        let clicked = false;
+        if (candidates.length > 0) {
+            // Sắp xếp: Chọn thằng có text ngắn nhất (Item cụ thể)
+            candidates.sort((a, b) => a.length - b.length);
+            
+            const bestMatch = candidates[0];
+            console.log(`🎯 CLICKING: "${bestMatch.text.trim()}"`);
+            
+            await bestMatch.el.scrollIntoViewIfNeeded().catch(() => {});
             try {
-                const items = this.page.locator(selector);
-                const count = await items.count();
-
-                for (let i = 0; i < count; i++) {
-                    const item = items.nth(i);
-                    const isVisible = await item.isVisible().catch(() => false);
-                    if (!isVisible) continue;
-
-                    const text = await item.textContent().catch(() => '');
-                    const href = await item.getAttribute('href').catch(() => '');
-                    const textLower = text?.toLowerCase() || '';
-
-                    // Skip header/nav links
-                    const isInHeader = await item.evaluate((el) => {
-                        return !!el.closest('header') || !!el.closest('nav');
-                    }).catch(() => false);
-                    if (isInHeader) continue;
-
-                    // Check if this result matches our search text
-                    // Normalize both strings: remove spaces and special chars for comparison
-                    const normalizedSearch = searchLower.replace(/[\s\-\_\.]/g, '');
-                    const normalizedText = textLower.replace(/[\s\-\_\.]/g, '');
-
-                    // Check if normalized search is contained in normalized text or vice versa
-                    const containsMatch = normalizedText.includes(normalizedSearch) ||
-                                         normalizedSearch.includes(normalizedText.substring(0, normalizedSearch.length));
-
-                    // Also check word-by-word matching
-                    const searchWords = searchLower.split(/[\s\-]+/).filter(w => w.length > 1);
-                    const matchCount = searchWords.filter(word => textLower.includes(word)).length;
-                    const matchRatio = searchWords.length > 0 ? matchCount / searchWords.length : 0;
-
-                    console.log(`Checking [${i}]: "${text?.trim().substring(0, 50)}"`);
-                    console.log(`  Normalized: "${normalizedSearch}" vs "${normalizedText.substring(0, 30)}..." containsMatch=${containsMatch}`);
-                    console.log(`  Words: ${matchCount}/${searchWords.length} (${(matchRatio * 100).toFixed(0)}%)`);
-
-                    // Match if: contains match OR at least 50% word match
-                    if ((containsMatch || matchRatio >= 0.5) && href && href.includes('collection')) {
-                        let fullUrl = href;
-                        if (href.startsWith('/')) {
-                            const baseUrl = new URL(this.page.url());
-                            fullUrl = `${baseUrl.origin}${href}`;
-                        }
-                        console.log(`✅ Match found! Navigating to: ${fullUrl}`);
-                        await this.page.goto(fullUrl, { waitUntil: 'domcontentloaded' });
-                        await this.page.waitForTimeout(1000);
-                        resultClicked = true;
-                        break;
-                    }
-                }
-
-                if (resultClicked) break;
-            } catch (e) {
-                // Continue
+                await bestMatch.el.click({ force: true, timeout: 2000 });
+            } catch {
+                // Fallback click cha
+                await bestMatch.el.locator('xpath=..').click({ force: true });
             }
+            clicked = true;
         }
 
-        // Method 2: Find clickable item that contains search text (fallback)
-        if (!resultClicked) {
-            const dropdownSelectors = [
-                `[role="listbox"] [role="option"]:has-text("${searchText}")`,
-                `[role="menu"] [role="menuitem"]:has-text("${searchText}")`,
-                `[class*="dropdown"] a:has-text("${searchText}")`,
-                `[class*="dropdown"] div:has-text("${searchText}")`,
-                `[class*="popover"] a:has-text("${searchText}")`,
-                `[class*="result"] a:has-text("${searchText}")`,
-                `[class*="suggestion"] a:has-text("${searchText}")`,
-                `[class*="autocomplete"] a:has-text("${searchText}")`,
-                `a[href*="collection"]:has-text("${searchText}")`,
-                `a[href*="nft"]:has-text("${searchText}")`,
-            ];
-
-            for (const selector of dropdownSelectors) {
-                try {
-                    const item = this.page.locator(selector).first();
-                    if (await item.isVisible({ timeout: 2000 }).catch(() => false)) {
-                        console.log(`Found result with selector: ${selector}`);
-
-                        const href = await item.getAttribute('href').catch(() => '');
-                        console.log(`  Element href: "${href}"`);
-
-                        if (href && href.length > 1) {
-                            let fullUrl = href;
-                            if (href.startsWith('/')) {
-                                const baseUrl = new URL(this.page.url());
-                                fullUrl = `${baseUrl.origin}${href}`;
-                            }
-                            await this.page.goto(fullUrl, { waitUntil: 'domcontentloaded' });
-                            resultClicked = true;
-                            break;
-                        }
-
-                        await item.click({ force: true, timeout: 3000 });
-                        resultClicked = true;
-                        break;
-                    }
-                } catch (e) {
-                    // Continue
-                }
-            }
-        }
-
-        // Method 3: Find any link containing the search text (not the input itself)
-        if (!resultClicked) {
-            try {
-                // Get all links with the search text
-                const links = this.page.locator(`a:has-text("${searchText}")`);
-                const linkCount = await links.count();
-                console.log(`Found ${linkCount} links with text "${searchText}"`);
-
-                for (let i = 0; i < linkCount; i++) {
-                    const link = links.nth(i);
-                    const href = await link.getAttribute('href').catch(() => '');
-                    const isVisible = await link.isVisible().catch(() => false);
-                    console.log(`  Link ${i}: href="${href}", visible=${isVisible}`);
-
-                    // Click on visible link that's not inside the search input area
-                    if (isVisible && href && href.length > 1) {
-                        await link.click();
-                        console.log(`Clicked link ${i} with href: ${href}`);
-                        resultClicked = true;
-                        break;
-                    }
-                }
-            } catch (e) {
-                console.log('Error finding links:', e);
-            }
-        }
-
-        // Method 4: Find div/span with the collection name that's clickable
-        if (!resultClicked) {
-            try {
-                // Look for clickable elements in dropdown area
-                const clickableItems = this.page.locator(`div:has-text("${searchText}"):not(:has(input))`);
-                const itemCount = await clickableItems.count();
-                console.log(`Found ${itemCount} div elements with text`);
-
-                // Click on the smallest/most specific one (usually the result item)
-                for (let i = 0; i < Math.min(itemCount, 5); i++) {
-                    const item = clickableItems.nth(i);
-                    const isVisible = await item.isVisible().catch(() => false);
-                    const boundingBox = await item.boundingBox().catch(() => null);
-
-                    // Skip if it's too large (probably a container) or not visible
-                    if (isVisible && boundingBox && boundingBox.height < 100 && boundingBox.height > 20) {
-                        console.log(`Clicking div ${i} (height: ${boundingBox.height})`);
-                        await item.click();
-                        resultClicked = true;
-                        break;
-                    }
-                }
-            } catch (e) {
-                console.log('Error finding div elements:', e);
-            }
-        }
-
-        // Method 5: Use keyboard navigation
-        if (!resultClicked) {
-            console.log('Trying keyboard navigation...');
-            // Press Down to select first result, then Enter
+        // Fallback: Dùng phím nếu chuột thất bại
+        if (!clicked) {
+            console.log('⚠️ No match found. Using Keyboard fallback...');
             await this.page.keyboard.press('ArrowDown');
             await this.page.waitForTimeout(500);
             await this.page.keyboard.press('Enter');
-            console.log('Pressed ArrowDown + Enter');
-            resultClicked = true; // Assume it worked
         }
 
-        await this.page.waitForTimeout(2000);
-
-        // Check if new page opened or we navigated on same page
+        await this.page.waitForTimeout(3000);
+        
+        // Return page logic
         const newPage = await newPagePromise;
         if (newPage) {
             await newPage.waitForLoadState('domcontentloaded');
-            console.log('New tab opened for collection details');
             return newPage;
-        } else {
-            // Same page navigation - check URL changed
-            await this.page.waitForLoadState('domcontentloaded');
-            const currentUrl = this.page.url();
-            console.log(`Current URL: ${currentUrl}`);
-
-            if (currentUrl.includes('collection') || currentUrl.includes('nft')) {
-                console.log('Navigated to collection details on same page');
-            } else {
-                console.log('Warning: URL may not have changed to collection page');
-            }
-            return this.page;
         }
+        await this.page.waitForLoadState('domcontentloaded');
+        return this.page;
     }
 
     // Store the actual collection name found on page
