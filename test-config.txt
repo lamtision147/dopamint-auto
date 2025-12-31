@@ -8,7 +8,8 @@
 #   - create.spec.ts                               (Single file - 1 notification)
 #   - dopamintLogin.spec.ts,create.spec.ts         (Multiple files - separate notifications)
 #   - all                                          (Run all tests - 1 notification)
-TEST_FILE=dopamintLogin.spec.ts,create.spec.ts
-
+TEST_FILE=dopamintLogin.spec.ts,create.spec.ts,searchMintSell.spec.ts
+#TEST_FILE=searchMintSell.spec.ts
+TEST_CASE=
 # Test name for Telegram notification (used for single file mode only)
 TEST_NAME=login and Create and Mint

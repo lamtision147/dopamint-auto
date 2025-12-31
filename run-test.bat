@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 :: ========================================
 :: Dopamint Playwright Auto Test Runner
-:: Supports: single file, multiple files (comma-separated), or "all"
+:: Supports: single file, multiple files, filter by test case
 :: ========================================
 
 :: Set working directory
@@ -17,11 +17,14 @@ if not exist "test-results" mkdir test-results
 :: ========================================
 set TEST_FILE=dopamintLogin.spec.ts
 set TEST_NAME=Login Test
+set TEST_CASE=
 
 if exist "test-config.txt" (
     for /f "tokens=1,* delims==" %%A in ('findstr /v "^#" test-config.txt ^| findstr /v "^$"') do (
         if "%%A"=="TEST_FILE" set TEST_FILE=%%B
         if "%%A"=="TEST_NAME" set TEST_NAME=%%B
+        :: <--- MỚI: Đọc thêm cấu hình TEST_CASE
+        if "%%A"=="TEST_CASE" set TEST_CASE=%%B
     )
 )
 
@@ -29,6 +32,8 @@ echo.
 echo ========================================
 echo   Config: %TEST_FILE%
 echo   Name: %TEST_NAME%
+:: <--- MỚI: Hiển thị case đang lọc
+if not "%TEST_CASE%"=="" echo   Case Filter: "%TEST_CASE%"
 echo ========================================
 
 :: Track overall exit code
@@ -53,7 +58,6 @@ if %errorlevel%==0 (
     for %%F in (%TEST_FILE%) do (
         set /a FILE_INDEX+=1
         set "CURRENT_FILE=%%F"
-        :: Remove any spaces
         set "CURRENT_FILE=!CURRENT_FILE: =!"
         echo.
         echo ----------------------------------------
@@ -77,7 +81,7 @@ goto :EndScript
 set "SINGLE_FILE=%~1"
 set "SINGLE_NAME=%~2"
 
-:: Get current date/time for log file (instant - no external commands)
+:: Get current date/time for log
 set "HH=%time:~0,2%"
 set "MM=%time:~3,2%"
 set "SS=%time:~6,2%"
@@ -91,9 +95,11 @@ set LOGFILE=test-results\test-log-%SINGLE_FILE%-%RANDOM%.txt
 echo ======================================== >> !LOGFILE!
 echo Test started at %date% %time% >> !LOGFILE!
 echo Test file: %SINGLE_FILE% >> !LOGFILE!
+:: <--- MỚI: Ghi log case filter
+if not "%TEST_CASE%"=="" echo Test Case Filter: "%TEST_CASE%" >> !LOGFILE!
 echo ======================================== >> !LOGFILE!
 
-:: Record start time in seconds
+:: Record start time
 for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
     set /a START_H=%%a
     set /a START_M=1%%b-100
@@ -102,17 +108,28 @@ for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
 set /a START_TOTAL=!START_H!*3600+!START_M!*60+!START_S!
 
 echo Running Playwright test: %SINGLE_FILE%...
+if not "%TEST_CASE%"=="" echo   ...Filtering for case: "%TEST_CASE%"
 echo Running tests... >> !LOGFILE!
 
-:: Use direct call instead of npx for faster startup
+:: ======================================================
+:: <--- MỚI: Xử lý logic ghép lệnh chạy
+:: ======================================================
+set "CMD_ARGS=--reporter=list"
+
+:: Nếu có TEST_CASE, thêm tham số -g (grep) vào lệnh
+if not "%TEST_CASE%"=="" (
+    set "CMD_ARGS=!CMD_ARGS! -g "%TEST_CASE%""
+)
+
 if /i "%SINGLE_FILE%"=="all" (
-    call node_modules\.bin\playwright.cmd test tests/ --reporter=list 2>&1 >> !LOGFILE!
+    call node_modules\.bin\playwright.cmd test tests/ !CMD_ARGS! 2>&1 >> !LOGFILE!
 ) else (
-    call node_modules\.bin\playwright.cmd test tests/%SINGLE_FILE% --reporter=list 2>&1 >> !LOGFILE!
+    call node_modules\.bin\playwright.cmd test tests/%SINGLE_FILE% !CMD_ARGS! 2>&1 >> !LOGFILE!
 )
 set TEST_EXIT_CODE=!errorlevel!
+:: ======================================================
 
-:: Record end time and calculate duration
+:: Record end time
 for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
     set /a END_H=%%a
     set /a END_M=1%%b-100
@@ -120,7 +137,6 @@ for /f "tokens=1-4 delims=:.," %%a in ("%time%") do (
 )
 set /a END_TOTAL=!END_H!*3600+!END_M!*60+!END_S!
 
-:: Calculate duration in seconds
 set /a DURATION=!END_TOTAL!-!START_TOTAL!
 if !DURATION! lss 0 set /a DURATION=!DURATION!+86400
 
@@ -139,13 +155,11 @@ if !TEST_EXIT_CODE!==0 (
 echo Test finished with status: !STATUS! >> !LOGFILE!
 echo Exit code: !TEST_EXIT_CODE! >> !LOGFILE!
 
-:: Send Telegram notification for this test
+:: Send Telegram
 echo Sending Telegram notification for %SINGLE_FILE%...
 node scripts/send-telegram.js !STATUS! !DURATION! "%SINGLE_NAME%" "%SINGLE_FILE%" "!LOGFILE!"
 
-:: Small delay between notifications to avoid rate limiting
 timeout /t 2 /nobreak >nul
-
 goto :eof
 
 :: ========================================
@@ -158,7 +172,5 @@ echo   All Tests Complete! Check Telegram.
 echo ========================================
 echo.
 
-:: Keep window open for 5 seconds
 timeout /t 5
-
 exit /b %OVERALL_EXIT_CODE%

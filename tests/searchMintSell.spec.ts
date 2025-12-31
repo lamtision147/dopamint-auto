@@ -29,7 +29,7 @@ const COLLECTION_TO_INDEX: Record<string, number> = {
     'Auto Banana - OLD': 0,
     'Auto ChatGPT - OLD': 1,
     'Auto Banana Pro - OLD': 2,
-    'Vu testChatGPT': 3,
+    'Vu test ChatGPT 1.5': 3,
     'Auto Fairlaunch with ChatGPT 1.5': 4
 };
 
@@ -38,7 +38,7 @@ const COLLECTION_TO_MODEL: Record<string, string> = {
     'Auto Banana - OLD': 'Nano Banana',
     'Auto ChatGPT - OLD': 'ChatGPT',
     'Auto Banana Pro - OLD': 'Nano Banana Pro',
-    'Vu testChatGPT': 'ChatGPT image 1.5',
+    'Vu test ChatGPT 1.5': 'ChatGPT image 1.5',
     'Auto Fairlaunch with ChatGPT 1.5': 'ChatGPT image 1.5'
 };
 
@@ -47,7 +47,7 @@ const COLLECTION_TO_TYPE: Record<string, string> = {
     'Auto Banana - OLD': 'bonding',
     'Auto ChatGPT - OLD': 'bonding',
     'Auto Banana Pro - OLD': 'bonding',
-    'Vu testChatGPT': 'bonding',
+    'Vu test ChatGPT 1.5': 'bonding',
     'Auto Fairlaunch with ChatGPT 1.5': 'fairlaunch'
 };
 
@@ -58,10 +58,16 @@ export const test = baseTest.extend<{
 }>({
     // Extract test index from test title
     testIndex: async ({}, use, testInfo) => {
+        const caseMatch = testInfo.title.match(/Case\s+(\d+)/i);
+        let index = caseMatch ? Math.max(0, parseInt(caseMatch[1], 10) - 1) : 0;
         const collectionMatch = testInfo.title.match(/collection "(.+)"/);
-        const collection = collectionMatch ? collectionMatch[1] : 'Auto Banana - OLD';
-        const index = COLLECTION_TO_INDEX[collection] ?? 0;
-        //const index = 0; // Sửa số này thành 0 để chạy NGAY LẬP TỨC
+        if (collectionMatch) {
+            const collection = collectionMatch[1].trim();
+            if (COLLECTION_TO_INDEX.hasOwnProperty(collection)) {
+                index = COLLECTION_TO_INDEX[collection];
+            }
+        }
+        console.log(`[testIndex] Computed index=${index} for title="${testInfo.title}"`);
         await use(index);
     },
 
@@ -392,7 +398,7 @@ test.describe('Search, Mint and Sell NFT Flow', () => {
             'token-urls-auto-banana---old.json',
             'token-urls-auto-chatgpt---old.json',
             'token-urls-auto-banana-pro---old.json',
-            'token-urls-vu-testchatgpt.json',
+            'token-urls-vu-test-chatgpt-15.json',
             'token-urls-auto-fairlaunch-with-chatgpt-15.json'
         ];
 
