@@ -1,5 +1,5 @@
 import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask, TEST_FILE_OFFSETS } from '../dapp/metamaskSetup';
+import { setupMetaMask } from '../dapp/metamaskSetup';
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import { SearchMintSellPage } from '../pages/searchMintSellDopamint';
 import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
@@ -22,15 +22,7 @@ const COLLECTION_TO_SEARCH_TEXT: Record<string, string> = {
     'Auto ChatGPT - OLD': 'ChatGPT - OLD',
     'Auto Banana Pro - OLD': 'Banana Pro - OLD',
     'Vu test ChatGPT 1.5': 'ChatGPT 1.5',
-    'Auto Fairlaunch with ChatGPT 1.5': 'Auto Fairlaunchwith ChatGPT 1.5'};
-
-// Map collection name to test index for staggered parallel execution
-const COLLECTION_TO_INDEX: Record<string, number> = {
-    'Auto Banana - OLD': 0,
-    'Auto ChatGPT - OLD': 1,
-    'Auto Banana Pro - OLD': 2,
-    'Vu test ChatGPT 1.5': 3,
-    'Auto Fairlaunch with ChatGPT 1.5': 4
+    'Auto Fairlaunch with ChatGPT 1.5': 'Auto Fairlaunch with ChatGPT 1.5'
 };
 
 // Map collection name to model name for display in notifications
@@ -54,29 +46,14 @@ const COLLECTION_TO_TYPE: Record<string, string> = {
 export const test = baseTest.extend<{
     context: BrowserContext;
     wallet: Dappwright;
-    testIndex: number;
 }>({
-    // Extract test index from test title
-    testIndex: async ({}, use, testInfo) => {
-        const caseMatch = testInfo.title.match(/Case\s+(\d+)/i);
-        let index = caseMatch ? Math.max(0, parseInt(caseMatch[1], 10) - 1) : 0;
-        const collectionMatch = testInfo.title.match(/collection "(.+)"/);
-        if (collectionMatch) {
-            const collection = collectionMatch[1].trim();
-            if (COLLECTION_TO_INDEX.hasOwnProperty(collection)) {
-                index = COLLECTION_TO_INDEX[collection];
-            }
-        }
-        console.log(`[testIndex] Computed index=${index} for title="${testInfo.title}"`);
-        await use(index);
-    },
-
-    context: async ({ testIndex }, use) => {
-        // Use SEARCH_MINT_SELL file offset for staggered parallel execution across all test files
-
-        const { wallet, context } = await setupMetaMask(testIndex, TEST_FILE_OFFSETS.SEARCH_MINT_SELL);
-        //const { wallet, context } = await setupMetaMask(0, 0);
+    context: async ({}, use, testInfo) => {
+        // Each worker gets its own isolated MetaMask profile with 10s delay between workers
+        const workerIndex = testInfo.parallelIndex;
+        const { wallet, context } = await setupMetaMask(workerIndex);
         await use(context);
+        // Cleanup after test
+        await context.close().catch(() => {});
     },
 
     wallet: async ({ context }, use) => {
@@ -116,8 +93,8 @@ async function runSearchMintSellFlow(
     // Click Search button on header
     await searchMintSellPage.clickSearchButton();
 
-    // Search for collection and navigate to details
-    const collectionPage = await searchMintSellPage.searchAndSelectCollection(searchText);
+    // Search for collection and navigate to details (pass expectedCollectionUrl for precise matching)
+    const collectionPage = await searchMintSellPage.searchAndSelectCollection(searchText, expectedCollectionUrl);
 
     // ========== PHASE 3: VERIFY COLLECTION TITLE ==========
     console.log('\n========== PHASE 3: VERIFY COLLECTION TITLE ==========');

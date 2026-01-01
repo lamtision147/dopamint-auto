@@ -1,5 +1,5 @@
 import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask, TEST_FILE_OFFSETS } from '../dapp/metamaskSetup';
+import { setupMetaMask } from '../dapp/metamaskSetup';
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import { DopamintCreatePage, AIModel } from '../pages/createDopamint';
 import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
@@ -13,32 +13,17 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 // Get output directory (spec-specific or default)
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
-// Map model name to test index for staggered parallel execution
-const MODEL_TO_INDEX: Record<string, number> = {
-    'Nano Banana Pro': 0,
-    'Nano Banana': 1,
-    'ChatGPT': 2,
-    'ChatGPT image 1.5': 3,
-    'Fair Launch': 4
-};
-
 export const test = baseTest.extend<{
     context: BrowserContext;
     wallet: Dappwright;
-    testIndex: number;
 }>({
-    // Extract test index from test title
-    testIndex: async ({}, use, testInfo) => {
-        const modelMatch = testInfo.title.match(/with (.+) model/);
-        const model = modelMatch ? modelMatch[1] : 'Nano Banana Pro';
-        const index = MODEL_TO_INDEX[model] ?? 0;
-        await use(index);
-    },
-
-    context: async ({ testIndex }, use) => {
-        // Use CREATE file offset for staggered parallel execution across all test files
-        const { wallet, context } = await setupMetaMask(testIndex, TEST_FILE_OFFSETS.CREATE);
+    context: async ({}, use, testInfo) => {
+        // Each worker gets its own isolated MetaMask profile with 10s delay between workers
+        const workerIndex = testInfo.parallelIndex;
+        const { wallet, context } = await setupMetaMask(workerIndex);
         await use(context);
+        // Cleanup after test
+        await context.close().catch(() => {});
     },
 
     wallet: async ({ context }, use) => {

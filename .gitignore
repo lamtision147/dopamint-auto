@@ -7,6 +7,8 @@ playwright/.cache/
 .env.*
 !.env.*.example
 metamask-data/
+.metamask-profiles/
+.metamask-cache/
 *.log
 
 # MetaMask extension (large, can be downloaded)

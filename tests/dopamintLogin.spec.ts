@@ -1,8 +1,8 @@
 import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask, TEST_FILE_OFFSETS } from '../dapp/metamaskSetup';
+import { setupMetaMask } from '../dapp/metamaskSetup';
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
-import fs from 'fs'; // Import module file system
+import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -12,18 +12,17 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 // Get output directory (spec-specific or default)
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
-const DOPAMINT_EMAIL = process.env.DOPAMINT_EMAIL!;
-const DOPAMINT_PASSWORD = process.env.DOPAMINT_PASSWORD!;
-const baseUrl = 'https://dev.dopamint.ai/';
-
 export const test = baseTest.extend<{
   context: BrowserContext;
   wallet: Dappwright;
 }>({
-  context: async ({}, use) => {
-    // Use LOGIN file offset (0) for staggered parallel execution across all test files
-    const { wallet, context } = await setupMetaMask(0, TEST_FILE_OFFSETS.LOGIN);
+  context: async ({}, use, testInfo) => {
+    // Each worker gets its own isolated MetaMask profile with 10s delay between workers
+    const workerIndex = testInfo.parallelIndex;
+    const { wallet, context } = await setupMetaMask(workerIndex);
     await use(context);
+    // Cleanup after test
+    await context.close().catch(() => {});
   },
 
   wallet: async ({ context }, use) => {
