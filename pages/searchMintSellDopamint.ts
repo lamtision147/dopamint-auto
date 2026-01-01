@@ -158,181 +158,200 @@ async searchAndSelectCollection(searchText: string, targetUrl: string): Promise<
 
         // 1. Nhập text vào search input
         const searchInput = this.page.locator('input[placeholder*="Search"], input[type="search"]').first();
+        
+        // Ensure element is stable
+        try {
+            await searchInput.waitFor({ state: 'attached', timeout: 5000 });
+        } catch (e) {
+            console.log('Search input not found via placeholder, trying generic input...');
+        }
+        
         const finalInput = (await searchInput.isVisible().catch(() => false)) ? searchInput : this.page.locator('input:visible').first();
-        await finalInput.clear();
-        await finalInput.fill(searchText);
-        console.log(`\n✏️ Entered search text: "${searchText}"`);
+        
+        // Double check visibility before action
+        if (await finalInput.isVisible().catch(() => false)) {
+            await finalInput.clear();
+            await finalInput.fill(searchText);
+            console.log(`\n✏️ Entered search text: "${searchText}"`);
+        } else {
+            throw new Error("Could not find any visible search input field");
+        }
 
         // 2. Chờ dropdown kết quả xuất hiện
         console.log('⏳ Waiting for search dropdown results...');
         await this.page.waitForTimeout(3000);
 
-        // 3. DEBUG: Log tất cả elements trong vùng dropdown
-        console.log('\n📋 DEBUG: Scanning dropdown area...');
+        // 3. Scan results with scrolling
+        console.log('\n📋 DEBUG: Scanning dropdown area with scroll...');
 
-        // Tìm dropdown container trước
+        // Prioritize the scrollable container described by user
         const dropdownContainerSelectors = [
+            'div.overflow-y-auto', 
             '[role="listbox"]',
             '[role="dialog"]',
             '[data-radix-popper-content-wrapper]',
             'div[class*="dropdown"]',
             'div[class*="Dropdown"]',
-            'div[class*="popup"]',
-            'div[class*="Popup"]',
             'div[class*="result"]',
-            'div[class*="Result"]',
             'div[class*="search"]',
-            'div[class*="Search"]',
-            'ul[class*="list"]',
-            'div[class*="suggestion"]',
-            'div[class*="autocomplete"]',
+            'ul[class*="list"]'
         ];
 
         let dropdownContainer = null;
         for (const selector of dropdownContainerSelectors) {
             const container = this.page.locator(selector).first();
-            if (await container.isVisible({ timeout: 1000 }).catch(() => false)) {
+            if (await container.isVisible({ timeout: 2000 }).catch(() => false)) {
                 dropdownContainer = container;
                 console.log(`   ✅ Found dropdown container: ${selector}`);
                 break;
             }
         }
 
-        // 4. Quét TẤT CẢ elements trong dropdown (không chỉ <a> tags)
-        let allResults: { href: string; text: string; element: any }[] = [];
-
         if (dropdownContainer) {
-            // Lấy tất cả các elements có thể click được trong dropdown
-            const clickableSelectors = 'a, button, div[role="option"], div[role="button"], li, [onclick], [data-href]';
-            const clickables = dropdownContainer.locator(clickableSelectors);
-            const count = await clickables.count();
-            console.log(`   Found ${count} clickable elements in dropdown`);
+            const maxScrolls = 5; // Increased scan attempts
+            for (let scrollAttempt = 0; scrollAttempt <= maxScrolls; scrollAttempt++) {
+                console.log(`\n   --- Scan Attempt ${scrollAttempt + 1}/${maxScrolls + 1} ---`);
+                
+                // Lấy tất cả các elements có thể click được trong dropdown
+                const clickableSelectors = 'a, button, div[role="option"], div[role="button"], li, [onclick], [data-href]';
+                const clickables = dropdownContainer.locator(clickableSelectors);
+                const count = await clickables.count();
+                console.log(`   Found ${count} clickable elements in dropdown`);
 
-            for (let i = 0; i < Math.min(count, 30); i++) {
-                const el = clickables.nth(i);
-                if (!(await el.isVisible().catch(() => false))) continue;
+                for (let i = 0; i < count; i++) {
+                    const el = clickables.nth(i);
+                    if (!(await el.isVisible().catch(() => false))) continue;
 
-                // Lấy href từ nhiều nguồn
-                let href = await el.getAttribute('href').catch(() => '') || '';
-                if (!href) href = await el.getAttribute('data-href').catch(() => '') || '';
-                if (!href) href = await el.getAttribute('data-url').catch(() => '') || '';
+                    // Lấy href và text
+                    let href = await el.getAttribute('href').catch(() => '') || '';
+                    if (!href) href = await el.getAttribute('data-href').catch(() => '') || '';
+                    if (!href) href = await el.getAttribute('data-url').catch(() => '') || '';
 
-                const text = await el.textContent().catch(() => '') || '';
-                const tagName = await el.evaluate(node => node.tagName).catch(() => '');
+                    const text = await el.textContent().catch(() => '') || '';
+                    const tagName = await el.evaluate((node: any) => node.tagName).catch(() => '');
 
-                // Log tất cả elements để debug
-                if (text.trim().length > 0) {
-                    console.log(`      [${i}] <${tagName}> href="${href}" text="${text.trim().substring(0, 50)}..."`);
+                    // Debug log (limited)
+                    if (i < 3 || text.toLowerCase().includes('auto') || href.includes(targetAddress)) {
+                        console.log(`      [${i}] <${tagName}> Text: "${text.trim().substring(0, 50)}...", Href: "${href}"`);
+                    }
+
+                    let matchFound = false;
+
+                    // Check 1: Href contains address (Strict)
+                    if (href.includes('/collections/') && href.toLowerCase().includes(targetAddress)) {
+                        console.log(`   ✅ Found match by HREF address: ${href}`);
+                        matchFound = true;
+                    }
+                    // Check 2: Text contains searchText (New: for items without href)
+                    else if (text.trim().length > 0 && 
+                            (text.trim().toLowerCase() === searchText.toLowerCase() || 
+                             (searchText.length > 5 && text.toLowerCase().includes(searchText.toLowerCase())))) {
+                        console.log(`   ✅ Found match by TEXT matching search query: "${text.trim()}"`);
+                        matchFound = true;
+                    }
+                    // Check 3: Text contains partial address
+                    else if (text.toLowerCase().includes(targetAddress.substring(2, 10))) {
+                        console.log(`   ✅ Found match by TEXT partial address`);
+                        matchFound = true;
+                    }
+
+                    if (matchFound) {
+                        console.log('   🖱️ Clicking result...');
+                        
+                        // Capture current URL to detect navigation
+                        const oldUrl = this.page.url();
+                        
+                        // Setup listener for new page (tab)
+                        const newPagePromise = this.context.waitForEvent('page', { timeout: 5000 }).catch(() => null);
+                        
+                        await el.scrollIntoViewIfNeeded().catch(() => {});
+                        await el.click({ force: true });
+                        
+                        console.log('   ⏳ Clicked. Checking for navigation...');
+                        
+                        // Check for new page first
+                        const newPage = await newPagePromise;
+                        if (newPage) {
+                             await newPage.waitForLoadState('domcontentloaded');
+                             console.log(`📄 Navigated to new page: ${newPage.url()}`);
+                             return newPage;
+                        }
+                        
+                        // Check for URL change on current page
+                        try {
+                            await this.page.waitForFunction((startUrl) => window.location.href !== startUrl, oldUrl, { timeout: 5000 });
+                            console.log(`📄 URL changed to: ${this.page.url()}`);
+                        } catch (e) {
+                            console.log(`⚠️ URL did not change immediately. Current: ${this.page.url()}`);
+                        }
+                        
+                        // Safe wait for load state
+                        try {
+                            await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+                        } catch (e) {
+                            console.log('⚠️ waitForLoadState timed out, continuing anyway...');
+                        }
+                        
+                        return this.page;
+                    }
                 }
 
-                // Kiểm tra nếu element chứa collection address hoặc có href chứa collection
-                if (href.includes('/collections/') || href.toLowerCase().includes(targetAddress)) {
-                    allResults.push({ href, text: text.trim(), element: el });
-                }
-                // Hoặc kiểm tra nếu text/href chứa địa chỉ collection
-                else if (text.toLowerCase().includes(targetAddress.substring(2, 10))) {
-                    // Partial address match trong text
-                    allResults.push({ href: href || targetUrl, text: text.trim(), element: el });
+                // If not found, scroll down using multiple methods
+                if (scrollAttempt < maxScrolls) {
+                    console.log('   📜 Not found, scrolling down to load more...');
+                    
+                    try {
+                        // Method 1: Scroll last element into view
+                        const lastEl = clickables.last();
+                        if (await lastEl.isVisible().catch(() => false)) {
+                            await lastEl.scrollIntoViewIfNeeded().catch(() => {});
+                        }
+                        
+                        // Method 2: Mouse wheel simulation (more reliable for UI frameworks)
+                        const box = await dropdownContainer.boundingBox();
+                        if (box) {
+                            await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                            await this.page.mouse.wheel(0, 500);
+                        }
+
+                        // Method 3: Direct DOM manipulation + Event dispatch
+                        await dropdownContainer.evaluate((node: any) => {
+                            node.scrollTop += node.clientHeight;
+                            node.dispatchEvent(new Event('scroll', { bubbles: true }));
+                        });
+                    } catch (e) {
+                        console.log('Error during scroll:', e);
+                    }
+                    
+                    await this.page.waitForTimeout(2000); // Wait for load more
                 }
             }
-        } else {
-            console.log(`   ⚠️ No dropdown container found, searching entire page...`);
-
-            // Fallback: tìm trên toàn trang các link có chứa collection address
-            const allLinks = this.page.locator(`a[href*="${targetAddress}"], a[href*="/collections/"]`);
-            const linkCount = await allLinks.count();
-            console.log(`   Found ${linkCount} collection links on page`);
-
-            for (let i = 0; i < linkCount; i++) {
-                const link = allLinks.nth(i);
-                if (!(await link.isVisible().catch(() => false))) continue;
-
-                const href = await link.getAttribute('href').catch(() => '') || '';
-                const text = await link.textContent().catch(() => '') || '';
-
-                console.log(`      [${i}] href="${href}" text="${text.trim().substring(0, 50)}..."`);
-                allResults.push({ href, text: text.trim(), element: link });
-            }
+            console.log(`   ❌ Could not find collection in dropdown after ${maxScrolls + 1} scans.`);
         }
 
-        console.log(`\n📊 Total potential results found: ${allResults.length}`);
+        console.log(`   ⚠️ Dropdown search failed or no dropdown. Searching page links (Fallback)...`);
+        
+        // Fallback: tìm trên toàn trang
+        const allLinks = this.page.locator(`a[href*="${targetAddress}"], a[href*="/collections/"]`);
+        const linkCount = await allLinks.count();
+        console.log(`   Found ${linkCount} collection links on page`);
 
-        // 5. Tìm result có href chứa target address
-        let matchedResult = null;
-        for (const result of allResults) {
-            if (result.href.toLowerCase().includes(targetAddress)) {
-                matchedResult = result;
-                console.log(`\n🎯 MATCHED! Found collection with target address:`);
-                console.log(`   href: ${result.href}`);
-                console.log(`   text: "${result.text}"`);
-                break;
-            }
-        }
+        for (let i = 0; i < linkCount; i++) {
+            const link = allLinks.nth(i);
+            if (!(await link.isVisible().catch(() => false))) continue;
 
-        // 6. Nếu vẫn không tìm thấy, thử click vào kết quả đầu tiên có text matching
-        if (!matchedResult && allResults.length > 0) {
-            console.log(`\n⚠️ No exact address match, trying text match...`);
-            const searchKeyword = searchText.toLowerCase();
-
-            for (const result of allResults) {
-                if (result.text.toLowerCase().includes(searchKeyword) ||
-                    searchKeyword.includes(result.text.toLowerCase().substring(0, 10))) {
-                    matchedResult = result;
-                    console.log(`\n🎯 TEXT MATCHED! Found result with matching text:`);
-                    console.log(`   text: "${result.text}"`);
-                    break;
-                }
-            }
-        }
-
-        // 7. Nếu vẫn không tìm thấy -> thử keyboard navigation
-        if (!matchedResult) {
-            console.log(`\n⚠️ No match found. Trying keyboard navigation as fallback...`);
-
-            // Screenshot để debug
-            await this.page.screenshot({ path: `${process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results'}/search-dropdown-${targetAddress.substring(2, 10)}.png` });
-
-            // Thử dùng keyboard
-            await this.page.keyboard.press('ArrowDown');
-            await this.page.waitForTimeout(500);
-            await this.page.keyboard.press('Enter');
-            await this.page.waitForTimeout(3000);
-
-            // Kiểm tra URL sau khi navigate
-            const currentUrl = this.page.url();
-            if (currentUrl.toLowerCase().includes(targetAddress)) {
-                console.log(`✅ Keyboard navigation successful! URL: ${currentUrl}`);
+            const href = await link.getAttribute('href').catch(() => '') || '';
+            if (href.toLowerCase().includes(targetAddress)) {
+                console.log(`   ✅ Found fallback match by HREF: ${href}`);
+                await link.click();
+                await this.page.waitForTimeout(3000);
                 return this.page;
             }
-
-            // Nếu vẫn sai -> throw error
-            throw new Error(`Collection not found in search results. Expected address: ${targetAddress}. Search text: "${searchText}". Current URL: ${currentUrl}`);
         }
 
-        // 8. Click vào result đã tìm thấy
-        console.log(`\n🖱️ Clicking on matched result...`);
-
-        // Setup listener cho trang mới (nếu có)
-        const newPagePromise = this.context.waitForEvent('page', { timeout: 30000 }).catch(() => null);
-
-        await matchedResult.element.scrollIntoViewIfNeeded().catch(() => {});
-        await matchedResult.element.click({ force: true });
-
-        console.log(`✅ Clicked on result!`);
-
-        await this.page.waitForTimeout(3000);
-
-        // 9. Return page (có thể là trang mới hoặc trang hiện tại)
-        const newPage = await newPagePromise;
-        if (newPage) {
-            await newPage.waitForLoadState('domcontentloaded');
-            console.log(`📄 Navigated to new page: ${newPage.url()}`);
-            return newPage;
-        }
-
-        await this.page.waitForLoadState('domcontentloaded');
-        console.log(`📄 Navigated on same page: ${this.page.url()}`);
-        return this.page;
+        // Final failure
+        const currentUrl = this.page.url();
+        throw new Error(`Collection not found. Expected: ${targetAddress}. Search: "${searchText}". Current URL: ${currentUrl}`);
     }
 
     // Store the actual collection name found on page
