@@ -12,13 +12,13 @@ export type AIModel = 'Nano Banana Pro' | 'Nano Banana' | 'ChatGPT' | 'ChatGPT i
 
 export class DopamintCreatePage {
     readonly context: BrowserContext;
-    readonly wallet: Dappwright;
+    readonly wallet: Dappwright | null;
     page: Page;
 
     // Store selected model for telegram notification
     private selectedModel: AIModel = 'Nano Banana Pro';
 
-    constructor(context: BrowserContext, wallet: Dappwright, page: Page) {
+    constructor(context: BrowserContext, wallet: Dappwright | null, page: Page) {
         this.context = context;
         this.wallet = wallet;
         this.page = page;

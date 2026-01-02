@@ -8,14 +8,14 @@ const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
 export class SearchMintSellPage {
     readonly context: BrowserContext;
-    readonly wallet: Dappwright;
+    readonly wallet: Dappwright | null;
     page: Page;
 
     // Store the last token ID from COMMUNITY GALLERY
     private lastCommunityTokenId: number = 0;
     private collectionAddressStored: string = '';
 
-    constructor(context: BrowserContext, wallet: Dappwright, page: Page) {
+    constructor(context: BrowserContext, wallet: Dappwright | null, page: Page) {
         this.context = context;
         this.wallet = wallet;
         this.page = page;

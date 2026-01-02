@@ -1,8 +1,7 @@
-import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask } from '../dapp/metamaskSetup';
+import { BrowserContext, test as baseTest, expect, Page, chromium } from "@playwright/test";
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import { SearchMintSellPage } from '../pages/searchMintSellDopamint';
-import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
+import { DOPAMINT_SELECTORS } from '../xpath/dopamintLogin';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -12,6 +11,9 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 
 // Get output directory (spec-specific or default)
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+
+// Google session file path
+const GOOGLE_SESSION_PATH = path.resolve(__dirname, '../auth/googleSession.json');
 
 // Collection type definition
 type CollectionType = 'Auto Banana - OLD' | 'Auto ChatGPT - OLD' | 'Auto Banana Pro - OLD' | 'Vu test ChatGPT 1.5' | 'Auto Fairlaunch with ChatGPT 1.5';
@@ -43,29 +45,49 @@ const COLLECTION_TO_TYPE: Record<string, string> = {
     'Auto Fairlaunch with ChatGPT 1.5': 'fairlaunch'
 };
 
+// Delay between test cases (15 seconds) - Worker 0 starts immediately
+const TEST_CASE_DELAY_MS = 15000;
+
+// ============================================================
+// Test fixture with Google Session (no MetaMask needed)
+// ============================================================
 export const test = baseTest.extend<{
     context: BrowserContext;
-    wallet: Dappwright;
 }>({
     context: async ({}, use, testInfo) => {
-        // Each worker gets its own isolated MetaMask profile with 10s delay between workers
-        const workerIndex = testInfo.parallelIndex;
-        const { wallet, context } = await setupMetaMask(workerIndex);
+        // Worker 0 starts immediately, others delay based on index
+        const delay = testInfo.parallelIndex * TEST_CASE_DELAY_MS;
+        if (delay > 0) {
+            console.log(`⏳ [Test Delay] Worker ${testInfo.parallelIndex}: Waiting ${delay / 1000}s before starting...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            console.log(`✅ [Test Delay] Worker ${testInfo.parallelIndex}: Delay completed, starting test now...`);
+        } else {
+            console.log(`🚀 [Test Delay] Worker 0: Starting immediately (no delay)`);
+        }
+
+        // Check if Google session file exists
+        const hasGoogleSession = fs.existsSync(GOOGLE_SESSION_PATH);
+        if (hasGoogleSession) {
+            console.log(`📂 Loading saved Google session from: ${GOOGLE_SESSION_PATH}`);
+        } else {
+            console.log(`⚠️  No Google session found. Run: npx ts-node scripts/setupGoogleSession.ts`);
+        }
+
+        // Launch browser with saved session if available
+        const browser = await chromium.launch({ headless: false });
+        const context = await browser.newContext({
+            storageState: hasGoogleSession ? GOOGLE_SESSION_PATH : undefined
+        });
         await use(context);
         // Cleanup after test
         await context.close().catch(() => {});
-    },
-
-    wallet: async ({ context }, use) => {
-        const metamask = await dappwright.getWallet("metamask", context);
-        await use(metamask);
+        await browser.close().catch(() => {});
     },
 });
 
 // Helper function to run search mint sell flow for any collection
 async function runSearchMintSellFlow(
     collectionName: CollectionType,
-    wallet: Dappwright,
     page: Page,
     context: BrowserContext,
     expectedCollectionUrl: string
@@ -74,21 +96,30 @@ async function runSearchMintSellFlow(
     const collectionType = COLLECTION_TO_TYPE[collectionName] || 'bonding';
     const isFairLaunch = collectionType === 'fairlaunch';
 
-    // ========== PHASE 1: LOGIN WITH METAMASK ==========
-    console.log('\n========== PHASE 1: LOGIN WITH METAMASK ==========');
-    const dopamintPage = new DopamintLoginPage(context, wallet);
+    // ========== PHASE 1: LOGIN ==========
+    console.log('\n========== PHASE 1: LOGIN ==========');
+
+    const dopamintPage = new DopamintLoginPage(context, null);
     const dappPage = await dopamintPage.navigateAndLogin();
     await dopamintPage.closeAllPopups();
-    await dopamintPage.loginWithMetaMask();
-    await dopamintPage.verifyLoginButtonHidden();
-    console.log('✅ Login successful!');
+
+    // Check if already logged in (session loaded from file)
+    const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
+    const isLoginVisible = await loginButton.isVisible({ timeout: 3000 }).catch(() => false);
+
+    if (!isLoginVisible) {
+        console.log('✅ Already logged in via saved session!');
+    } else {
+        // No valid session - need to login
+        throw new Error('No valid Google session found. Please run: npx ts-node scripts/setupGoogleSession.ts');
+    }
 
     // ========== PHASE 2: SEARCH FOR COLLECTION ==========
     console.log('\n========== PHASE 2: SEARCH FOR COLLECTION ==========');
     // Use mapped search text or default to collection name
     const searchText = COLLECTION_TO_SEARCH_TEXT[collectionName] || collectionName;
     console.log(`🔍 Searching for collection: ${collectionName} with text "${searchText}"`);
-    const searchMintSellPage = new SearchMintSellPage(context, wallet, dappPage);
+    const searchMintSellPage = new SearchMintSellPage(context, null, dappPage);
 
     // Click Search button on header
     await searchMintSellPage.clickSearchButton();
@@ -272,7 +303,7 @@ async function runSearchMintSellFlow(
     fs.writeFileSync(tokenInfoPath, JSON.stringify(tokenInfo, null, 2));
     console.log(`✅ Token URLs saved to: token-urls-${safeCollectionName}.json`);
 
-    await page.waitForTimeout(3000);
+    await dappPage.waitForTimeout(3000);
 
     return {
         collectionName,
@@ -285,27 +316,32 @@ async function runSearchMintSellFlow(
 
 test.describe('Search, Mint and Sell NFT Flow', () => {
     // Increase timeout to 10 minutes because mint operations can take time
-    // Run all 3 tests in parallel - each test has its own MetaMask context via fixture
+    // Run all tests in parallel
     test.describe.configure({ timeout: 600000, mode: 'parallel' });
 
-    test('Case 1: Search collection "Auto Banana - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto Banana - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x60E22057b9150772367f02F35c8072BA9EdE793c');
+    test('Case 1: Search collection "Auto Banana - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ context }) => {
+        const page = await context.newPage();
+        await runSearchMintSellFlow('Auto Banana - OLD', page, context, 'https://dev.dopamint.ai/collections/0x60E22057b9150772367f02F35c8072BA9EdE793c');
     });
 
-    test('Case 2: Search collection "Auto ChatGPT - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto ChatGPT - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x2E012B074d69aE6fC652C9999973E4cB1502DbBB');
+    test('Case 2: Search collection "Auto ChatGPT - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ context }) => {
+        const page = await context.newPage();
+        await runSearchMintSellFlow('Auto ChatGPT - OLD', page, context, 'https://dev.dopamint.ai/collections/0x2E012B074d69aE6fC652C9999973E4cB1502DbBB');
     });
 
-    test('Case 3: Search collection "Auto Banana Pro - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto Banana Pro - OLD', wallet, page, context, 'https://dev.dopamint.ai/collections/0x4F6fb0f7fCE2B3f83A8bd255E49d15Bc6610cede');
+    test('Case 3: Search collection "Auto Banana Pro - OLD", Mint 2 NFTs, and Sell 1 NFT', async ({ context }) => {
+        const page = await context.newPage();
+        await runSearchMintSellFlow('Auto Banana Pro - OLD', page, context, 'https://dev.dopamint.ai/collections/0x4F6fb0f7fCE2B3f83A8bd255E49d15Bc6610cede');
     });
 
-    test('Case 4: Search collection "Vu test ChatGPT 1.5", Mint 2 NFTs, and Sell 1 NFT', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Vu test ChatGPT 1.5', wallet, page, context, 'https://dev.dopamint.ai/collections/0xB2fC471737a802c37368f2B24A1e0B7f6953fC46');
+    test('Case 4: Search collection "Vu test ChatGPT 1.5", Mint 2 NFTs, and Sell 1 NFT', async ({ context }) => {
+        const page = await context.newPage();
+        await runSearchMintSellFlow('Vu test ChatGPT 1.5', page, context, 'https://dev.dopamint.ai/collections/0xB2fC471737a802c37368f2B24A1e0B7f6953fC46');
     });
 
-    test('Case 5: Search collection "Auto Fairlaunch with ChatGPT 1.5", Mint 2 NFTs, and Sell on OpenSea', async ({ wallet, page, context }) => {
-        await runSearchMintSellFlow('Auto Fairlaunch with ChatGPT 1.5', wallet, page, context, 'https://dev.dopamint.ai/collections/0xFDaC323Ad425FaC41C478B24Cf465f5ef95C9B86');
+    test('Case 5: Search collection "Auto Fairlaunch with ChatGPT 1.5", Mint 2 NFTs, and Sell on OpenSea', async ({ context }) => {
+        const page = await context.newPage();
+        await runSearchMintSellFlow('Auto Fairlaunch with ChatGPT 1.5', page, context, 'https://dev.dopamint.ai/collections/0xFDaC323Ad425FaC41C478B24Cf465f5ef95C9B86');
     });
 
     test.afterEach(async ({ context }, testInfo) => {

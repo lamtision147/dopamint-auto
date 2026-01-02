@@ -15,16 +15,25 @@ if not exist "test-results" mkdir test-results
 :: ========================================
 :: Load config from test-config.txt
 :: ========================================
-set TEST_FILE=dopamintLogin.spec.ts
+:: Check for child process argument
+if "%1"=="--child" (
+    set "TEST_FILE=%~2"
+    set "IS_CHILD=1"
+) else (
+    set TEST_FILE=dopamintLogin.spec.ts
+)
+
 set TEST_NAME=Login Test
 set TEST_CASE=
 
-if exist "test-config.txt" (
-    for /f "tokens=1,* delims==" %%A in ('findstr /v "^#" test-config.txt ^| findstr /v "^$"') do (
-        if "%%A"=="TEST_FILE" set TEST_FILE=%%B
-        if "%%A"=="TEST_NAME" set TEST_NAME=%%B
-        :: <--- MỚI: Đọc thêm cấu hình TEST_CASE
-        if "%%A"=="TEST_CASE" set TEST_CASE=%%B
+if not defined IS_CHILD (
+    if exist "test-config.txt" (
+        for /f "tokens=1,* delims==" %%A in ('findstr /v "^#" test-config.txt ^| findstr /v "^$"') do (
+            if "%%A"=="TEST_FILE" set TEST_FILE=%%B
+            if "%%A"=="TEST_NAME" set TEST_NAME=%%B
+            :: <--- MỚI: Đọc thêm cấu hình TEST_CASE
+            if "%%A"=="TEST_CASE" set TEST_CASE=%%B
+        )
     )
 )
 
@@ -51,7 +60,7 @@ if /i "%TEST_FILE%"=="all" (
 echo %TEST_FILE% | findstr /C:"," >nul
 if %errorlevel%==0 (
     echo.
-    echo Multiple files detected, running each separately...
+    echo Multiple files detected, running in PARALLEL mode like CodeBuild...
 
     :: Parse comma-separated files
     set FILE_INDEX=0
@@ -59,13 +68,29 @@ if %errorlevel%==0 (
         set /a FILE_INDEX+=1
         set "CURRENT_FILE=%%F"
         set "CURRENT_FILE=!CURRENT_FILE: =!"
+        
+        if !FILE_INDEX! GTR 1 (
+            echo Waiting 70s before starting next test...
+            timeout /t 70 /nobreak
+        )
+
         echo.
         echo ----------------------------------------
-        echo   [!FILE_INDEX!] Running: !CURRENT_FILE!
+        echo   [!FILE_INDEX!] Spawning: !CURRENT_FILE!
         echo ----------------------------------------
-        call :RunSingleTest "!CURRENT_FILE!" "!CURRENT_FILE!"
+        
+        :: Create unique temp dir for child process to avoid conflicts
+        set "CHILD_TMP=%TEMP%\dappwright-!RANDOM!-!FILE_INDEX!"
+        if not exist "!CHILD_TMP!" mkdir "!CHILD_TMP!"
+
+        :: Start in new window with unique temp dir
+        start "Test: !CURRENT_FILE!" cmd /c "set TEMP=!CHILD_TMP!&& set TMP=!CHILD_TMP!&& run-test.bat --child !CURRENT_FILE!"
     )
-    goto :EndScript
+    
+    echo.
+    echo All tests spawned in separate windows.
+    echo Please check individual windows for progress.
+    goto :eof
 )
 
 :: Single file mode

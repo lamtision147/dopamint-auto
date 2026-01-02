@@ -17,8 +17,8 @@ const SEED_PHRASE = process.env.METAMASK_SEED_PHRASE ||
 // Only use WALLET_0 for all tests
 const WALLET_0_KEY = process.env.WALLET_0;
 
-// Delay between workers in milliseconds (10 seconds)
-const WORKER_DELAY_MS = 10000;
+// Delay between workers in milliseconds (1 minute 10 seconds = 70 seconds)
+const WORKER_DELAY_MS = 70000;
 
 /**
  * Setup MetaMask with isolated profile for each worker

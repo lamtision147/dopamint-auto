@@ -1,8 +1,7 @@
-import { BrowserContext, test as baseTest, expect, Page } from "@playwright/test";
-import { setupMetaMask } from '../dapp/metamaskSetup';
+import { BrowserContext, test as baseTest, expect, Page, chromium } from "@playwright/test";
 import { DopamintLoginPage } from '../pages/loginDopamint';
 import { DopamintCreatePage, AIModel } from '../pages/createDopamint';
-import dappwright, { Dappwright } from "@tenkeylabs/dappwright";
+import { DOPAMINT_SELECTORS } from '../xpath/dopamintLogin';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -13,45 +12,77 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 // Get output directory (spec-specific or default)
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 
+// Google session file path
+const GOOGLE_SESSION_PATH = path.resolve(__dirname, '../auth/googleSession.json');
+
+// Delay between test cases (15 seconds) - Worker 0 starts immediately
+const TEST_CASE_DELAY_MS = 15000;
+
+// ============================================================
+// Test fixture with Google Session (no MetaMask needed)
+// ============================================================
 export const test = baseTest.extend<{
     context: BrowserContext;
-    wallet: Dappwright;
 }>({
     context: async ({}, use, testInfo) => {
-        // Each worker gets its own isolated MetaMask profile with 10s delay between workers
-        const workerIndex = testInfo.parallelIndex;
-        const { wallet, context } = await setupMetaMask(workerIndex);
+        // Worker 0 starts immediately, others delay based on index
+        const delay = testInfo.parallelIndex * TEST_CASE_DELAY_MS;
+        if (delay > 0) {
+            console.log(`⏳ [Test Delay] Worker ${testInfo.parallelIndex}: Waiting ${delay / 1000}s before starting...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            console.log(`✅ [Test Delay] Worker ${testInfo.parallelIndex}: Delay completed, starting test now...`);
+        } else {
+            console.log(`🚀 [Test Delay] Worker 0: Starting immediately (no delay)`);
+        }
+
+        // Check if Google session file exists
+        const hasGoogleSession = fs.existsSync(GOOGLE_SESSION_PATH);
+        if (hasGoogleSession) {
+            console.log(`📂 Loading saved Google session from: ${GOOGLE_SESSION_PATH}`);
+        } else {
+            console.log(`⚠️  No Google session found. Run: npx ts-node scripts/setupGoogleSession.ts`);
+        }
+
+        // Launch browser with saved session if available
+        const browser = await chromium.launch({ headless: false });
+        const context = await browser.newContext({
+            storageState: hasGoogleSession ? GOOGLE_SESSION_PATH : undefined
+        });
         await use(context);
         // Cleanup after test
         await context.close().catch(() => {});
-    },
-
-    wallet: async ({ context }, use) => {
-        const metamask = await dappwright.getWallet("metamask", context);
-        await use(metamask);
+        await browser.close().catch(() => {});
     },
 });
 
 // Helper function to run create flow for any model
 async function runCreateFlowWithModel(
     model: AIModel,
-    wallet: Dappwright,
     page: Page,
     context: BrowserContext
 ): Promise<{ collectionName: string; mintedCount: number; modelUsed: AIModel }> {
-    // STEP 1: Login with MetaMask
-    console.log('\n========== PHASE 1: LOGIN WITH METAMASK ==========');
-    const dopamintPage = new DopamintLoginPage(context, wallet);
+    // STEP 1: Login (use saved session or skip if already logged in)
+    console.log('\n========== PHASE 1: LOGIN ==========');
+
+    const dopamintPage = new DopamintLoginPage(context, null);
     const dappPage = await dopamintPage.navigateAndLogin();
     await dopamintPage.closeAllPopups();
-    await dopamintPage.loginWithMetaMask();
-    await dopamintPage.verifyLoginButtonHidden();
-    console.log('✅ Login successful!');
+
+    // Check if already logged in (session loaded from file)
+    const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
+    const isLoginVisible = await loginButton.isVisible({ timeout: 3000 }).catch(() => false);
+
+    if (!isLoginVisible) {
+        console.log('✅ Already logged in via saved session!');
+    } else {
+        // No valid session - need to login
+        throw new Error('No valid Google session found. Please run: npx ts-node scripts/setupGoogleSession.ts');
+    }
 
     // STEP 2: Start Create flow
     console.log('\n========== PHASE 2: CREATE NFT FLOW ==========');
     console.log(`🤖 Using AI Model: ${model}`);
-    const createPage = new DopamintCreatePage(context, wallet, dappPage);
+    const createPage = new DopamintCreatePage(context, null, dappPage);
 
     // Click Create button on header
     await createPage.clickCreateButton();
@@ -173,33 +204,41 @@ async function runCreateFlowWithModel(
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
     console.log(`✅ Create info saved to ${modelInfoPath}`);
 
-    await page.waitForTimeout(3000);
+    await dappPage.waitForTimeout(3000);
 
     return { collectionName, mintedCount, modelUsed };
 }
 
 // Helper function to run Fair Launch create flow
 async function runCreateFlowFairLaunch(
-    wallet: Dappwright,
     page: Page,
     context: BrowserContext
 ): Promise<{ collectionName: string; mintedCount: number; modelUsed: string }> {
     const modelUsed = 'ChatGPT image 1.5';  // Actual AI model used
     const collectionType = 'fairlaunch';     // Collection type: Fixed Price
 
-    // STEP 1: Login with MetaMask
-    console.log('\n========== PHASE 1: LOGIN WITH METAMASK ==========');
-    const dopamintPage = new DopamintLoginPage(context, wallet);
+    // STEP 1: Login (use saved session or skip if already logged in)
+    console.log('\n========== PHASE 1: LOGIN ==========');
+
+    const dopamintPage = new DopamintLoginPage(context, null);
     const dappPage = await dopamintPage.navigateAndLogin();
     await dopamintPage.closeAllPopups();
-    await dopamintPage.loginWithMetaMask();
-    await dopamintPage.verifyLoginButtonHidden();
-    console.log('✅ Login successful!');
+
+    // Check if already logged in (session loaded from file)
+    const loginButton = dappPage.locator(DOPAMINT_SELECTORS.LOGIN_BUTTON).first();
+    const isLoginVisible = await loginButton.isVisible({ timeout: 3000 }).catch(() => false);
+
+    if (!isLoginVisible) {
+        console.log('✅ Already logged in via saved session!');
+    } else {
+        // No valid session - need to login
+        throw new Error('No valid Google session found. Please run: npx ts-node scripts/setupGoogleSession.ts');
+    }
 
     // STEP 2: Start Create flow
     console.log('\n========== PHASE 2: CREATE NFT FLOW (FAIR LAUNCH) ==========');
     console.log('🚀 Creating Fair Launch collection with Fixed Price');
-    const createPage = new DopamintCreatePage(context, wallet, dappPage);
+    const createPage = new DopamintCreatePage(context, null, dappPage);
 
     // Click Create button on header
     await createPage.clickCreateButton();
@@ -310,34 +349,39 @@ async function runCreateFlowFairLaunch(
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
     console.log(`✅ Create info saved to ${modelInfoPath}`);
 
-    await page.waitForTimeout(3000);
+    await dappPage.waitForTimeout(3000);
 
     return { collectionName, mintedCount, modelUsed };
 }
 
 test.describe('Create NFT Flow', () => {
     // Increase timeout to 10 minutes because image generation can take 3-4 minutes
-    // Run all 3 tests in parallel - each test has its own MetaMask context via fixture
+    // Run all tests in parallel
     test.describe.configure({ timeout: 600000, mode: 'parallel' });
 
-    test("Case 1: Create NFT with Nano Banana Pro model", async ({ wallet, page, context }) => {
-        await runCreateFlowWithModel('Nano Banana Pro', wallet, page, context);
+    test("Case 1: Create NFT with Nano Banana Pro model", async ({ context }) => {
+        const page = await context.newPage();
+        await runCreateFlowWithModel('Nano Banana Pro', page, context);
     });
 
-    test("Case 2: Create NFT with Nano Banana model", async ({ wallet, page, context }) => {
-        await runCreateFlowWithModel('Nano Banana', wallet, page, context);
+    test("Case 2: Create NFT with Nano Banana model", async ({ context }) => {
+        const page = await context.newPage();
+        await runCreateFlowWithModel('Nano Banana', page, context);
     });
 
-    test("Case 3: Create NFT with ChatGPT model", async ({ wallet, page, context }) => {
-        await runCreateFlowWithModel('ChatGPT', wallet, page, context);
+    test("Case 3: Create NFT with ChatGPT model", async ({ context }) => {
+        const page = await context.newPage();
+        await runCreateFlowWithModel('ChatGPT', page, context);
     });
 
-    test("Case 4: Create NFT with ChatGPT image 1.5 model", async ({ wallet, page, context }) => {
-        await runCreateFlowWithModel('ChatGPT image 1.5', wallet, page, context);
+    test("Case 4: Create NFT with ChatGPT image 1.5 model", async ({ context }) => {
+        const page = await context.newPage();
+        await runCreateFlowWithModel('ChatGPT image 1.5', page, context);
     });
 
-    test("Case 5: Create NFT with Fair Launch model", async ({ wallet, page, context }) => {
-        await runCreateFlowFairLaunch(wallet, page, context);
+    test("Case 5: Create NFT with Fair Launch model", async ({ context }) => {
+        const page = await context.newPage();
+        await runCreateFlowFairLaunch(page, context);
     });
 
     test.afterEach(async ({ context }, testInfo) => {

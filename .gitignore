@@ -16,3 +16,10 @@ extensions/
 
 # Windows reserved files
 nul
+
+# Auth session files (sensitive - contains cookies)
+auth/
+
+# Chrome profile for Google login
+.chrome-profile/
+.chrome-profile-login/
