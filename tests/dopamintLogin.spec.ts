@@ -19,8 +19,6 @@ const LOGIN_EMAIL = process.env.GMAIL_EMAIL || 'vutesttran99@gmail.com';
 const GOOGLE_EMAIL = process.env.GOOGLE_EMAIL || 'vutesttran99@gmail.com';
 const GOOGLE_PASSWORD = process.env.GOOGLE_PASSWORD || '';
 
-// Check if running on CI (CodeBuild, GitHub Actions, etc.)
-const IS_CI = process.env.CI === 'true' || process.env.CODEBUILD_BUILD_ID !== undefined;
 
 // Delay between test cases (15 seconds) - Worker 0 starts immediately
 const TEST_CASE_DELAY_MS = 15000;
@@ -273,10 +271,7 @@ const context = await chromium.launchPersistentContext(CHROME_PROFILE_DIR, {
 });
 
 testWithGoogle.describe('Login with Google', () => {
-  testWithGoogle.describe.configure({ timeout: 180000 }); // 3 minutes for Google OAuth
-
-  // Skip on CI due to TOTP time sync issues - use saved session instead
-  testWithGoogle.skip(IS_CI, 'Google OAuth with 2FA skipped on CI - use saved session for create/searchMintSell tests');
+  testWithGoogle.describe.configure({ timeout: 300000 }); // 5 minutes for Google OAuth (includes TOTP retries)
 
   testWithGoogle("Case 3: Login with Google OAuth", async ({ context }) => {
     console.log(`\n🔐 Testing Google OAuth Login with: ${GOOGLE_EMAIL}`);

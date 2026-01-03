@@ -719,60 +719,93 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
         }
 
         if (GOOGLE_2FA_SECRET) {
-            // Auto generate and enter 2FA code
-            const totpCode = authenticator.generate(GOOGLE_2FA_SECRET);
-            console.log(`🔑 Generated TOTP code: ${totpCode}`);
-            console.log(`⏰ System time: ${new Date().toISOString()}`);
-            console.log(`🔐 Secret key (first 4 chars): ${GOOGLE_2FA_SECRET.substring(0, 4)}...`);
+            // Retry TOTP up to 3 times with delay between attempts
+            const MAX_TOTP_RETRIES = 3;
+            const TOTP_RETRY_DELAY_MS = 35000; // Wait 35 seconds for next TOTP window (codes change every 30s)
+            let totpSuccess = false;
 
-            // Find and fill 2FA input (6-digit TOTP)
-            const totpInput = googlePopup.locator('input[type="tel"]').or(
-                googlePopup.locator('input[name="totpPin"]')
-            ).or(
-                googlePopup.locator('input[aria-label*="code"]')
-            ).or(
-                googlePopup.locator('input[aria-label*="Enter code"]')
-            ).first();
+            for (let totpAttempt = 1; totpAttempt <= MAX_TOTP_RETRIES && !totpSuccess; totpAttempt++) {
+                // Generate fresh TOTP code for each attempt
+                const totpCode = authenticator.generate(GOOGLE_2FA_SECRET);
+                console.log(`\n🔑 TOTP Attempt ${totpAttempt}/${MAX_TOTP_RETRIES}`);
+                console.log(`   Code: ${totpCode}`);
+                console.log(`   Time: ${new Date().toISOString()}`);
+                console.log(`   Secret (first 4): ${GOOGLE_2FA_SECRET.substring(0, 4)}...`);
 
-            if (await totpInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-                // Try entering the code
-                await totpInput.fill(totpCode);
-                console.log('✅ TOTP code entered');
+                // Find and fill 2FA input (6-digit TOTP)
+                const totpInput = googlePopup.locator('input[type="tel"]').or(
+                    googlePopup.locator('input[name="totpPin"]')
+                ).or(
+                    googlePopup.locator('input[aria-label*="code"]')
+                ).or(
+                    googlePopup.locator('input[aria-label*="Enter code"]')
+                ).first();
 
-                // Click Next/Verify button
-                const verifyBtn = googlePopup.getByRole('button', { name: /Next|Verify|Xác minh|Tiếp theo/i }).first();
-                if (await verifyBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-                    await verifyBtn.click();
-                    console.log('✅ Clicked Verify button');
-                } else {
-                    await totpInput.press('Enter');
-                    console.log('✅ Pressed Enter to verify');
-                }
+                if (await totpInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+                    // Clear input and enter new code
+                    await totpInput.clear();
+                    await totpInput.fill(totpCode);
+                    console.log('   ✅ TOTP code entered');
 
-                // Wait a moment for verification
-                await googlePopup.waitForTimeout(3000);
+                    // Click Next/Verify button
+                    const verifyBtn = googlePopup.getByRole('button', { name: /Next|Verify|Xác minh|Tiếp theo/i }).first();
+                    if (await verifyBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                        await verifyBtn.click();
+                        console.log('   ✅ Clicked Verify button');
+                    } else {
+                        await totpInput.press('Enter');
+                        console.log('   ✅ Pressed Enter to verify');
+                    }
 
-                // Check if still on 2FA page (wrong code) - retry with different time windows
-                if (!googlePopup.isClosed()) {
+                    // Wait for verification result
+                    await googlePopup.waitForTimeout(3000);
+
+                    // Check if popup closed (success) or still on 2FA page (failed)
+                    if (googlePopup.isClosed()) {
+                        console.log('   ✅ TOTP verification successful - popup closed!');
+                        totpSuccess = true;
+                        break;
+                    }
+
                     const stillOn2FA = googlePopup.url().includes('/challenge/');
                     const wrongCodeVisible = await googlePopup.locator('text=Wrong code').isVisible({ timeout: 1000 }).catch(() => false);
+                    const tryAgainVisible = await googlePopup.locator('text=Try again').isVisible({ timeout: 500 }).catch(() => false);
 
-                    if (stillOn2FA || wrongCodeVisible) {
-                        console.log('⚠️ First TOTP attempt failed, code may be wrong or secret key mismatch');
-                        console.log('📱 Please check your Google Authenticator app and verify the secret key matches');
+                    if (!stillOn2FA && !wrongCodeVisible && !tryAgainVisible) {
+                        // Might have moved to consent screen or similar
+                        console.log('   ✅ TOTP verification may have succeeded - no longer on challenge page');
+                        totpSuccess = true;
+                        break;
+                    }
 
-                        // Take screenshot for debugging
+                    if (stillOn2FA || wrongCodeVisible || tryAgainVisible) {
+                        console.log(`   ⚠️ TOTP attempt ${totpAttempt} failed: Wrong code or time sync issue`);
+
+                        // Take debug screenshot
                         const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
-                        await googlePopup.screenshot({ path: `${outputDir}/totp-wrong-code.png` });
-                        console.log('📸 Screenshot saved: totp-wrong-code.png');
+                        await googlePopup.screenshot({ path: `${outputDir}/totp-attempt-${totpAttempt}.png` });
 
-                        // Wait for user to manually enter code (fallback)
-                        console.log('⏳ Waiting for manual 2FA entry (2 minutes timeout)...');
-                        await googlePopup.waitForEvent('close', { timeout: 120000 }).catch(() => {});
+                        if (totpAttempt < MAX_TOTP_RETRIES) {
+                            console.log(`   ⏳ Waiting ${TOTP_RETRY_DELAY_MS / 1000}s for next TOTP window...`);
+                            await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
+                        }
+                    }
+                } else {
+                    console.log('   ⚠️ TOTP input not found');
+                    const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+                    await googlePopup.screenshot({ path: `${outputDir}/totp-input-not-found-${totpAttempt}.png` });
+
+                    if (totpAttempt < MAX_TOTP_RETRIES) {
+                        console.log(`   ⏳ Waiting ${TOTP_RETRY_DELAY_MS / 1000}s before retry...`);
+                        await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
                     }
                 }
-            } else {
-                console.log('⚠️ TOTP input not found, waiting for manual input...');
+            }
+
+            // If all retries failed, wait for manual entry
+            if (!totpSuccess && !googlePopup.isClosed()) {
+                console.log('\n❌ All TOTP attempts failed after 3 retries');
+                console.log('⏳ Waiting for manual 2FA entry (2 minutes timeout)...');
                 await googlePopup.waitForEvent('close', { timeout: 120000 }).catch(() => {});
             }
         } else {
