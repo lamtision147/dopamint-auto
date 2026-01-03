@@ -52,7 +52,7 @@ phases:
       - echo "S3_SESSION_KEY=${S3_SESSION_KEY}" >> .env.test
       # Download Google session from S3
       - echo "Downloading Google session from S3..."
-      - aws s3 cp s3://${S3_BUCKET}/${S3_SESSION_KEY} auth/googleSession.json || echo "Warning: Could not download session file"
+      - 'aws s3 cp s3://${S3_BUCKET}/${S3_SESSION_KEY} auth/googleSession.json || echo "Warning: Could not download session file"'
       # Start D-Bus (required for Chrome)
       - mkdir -p /run/dbus
       - dbus-daemon --system --fork || true
