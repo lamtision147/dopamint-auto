@@ -108,7 +108,7 @@ const testWithEmail = baseTest.extend<{
     // Launch browser without MetaMask extension
     const browser = await chromium.launch({ headless: false });
     const context = await browser.newContext({
-      viewport: { width: 1920, height: 1080 }
+      viewport: { width: 1024, height: 768 }
     });
     await use(context);
     // Cleanup
@@ -246,7 +246,7 @@ const testWithGoogle = baseTest.extend<{
     const context = await chromium.launchPersistentContext(CHROME_PROFILE_DIR, {
       headless: false,
       channel: 'chrome',
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1024, height: 768 },
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-features=ImprovedCookieControls,LazyFrameLoading,GlobalMediaControls,DestroyProfileOnBrowserClose,MediaRouter',
