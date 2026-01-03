@@ -107,7 +107,9 @@ const testWithEmail = baseTest.extend<{
 
     // Launch browser without MetaMask extension
     const browser = await chromium.launch({ headless: false });
-    const context = await browser.newContext();
+    const context = await browser.newContext({
+      viewport: { width: 1920, height: 1080 }
+    });
     await use(context);
     // Cleanup
     await context.close().catch(() => {});
@@ -241,29 +243,26 @@ const testWithGoogle = baseTest.extend<{
     }
 
     // Launch real Chrome browser (not Chromium) to avoid Google blocking
-// Trong launchPersistentContext cho Case 3
-const context = await chromium.launchPersistentContext(CHROME_PROFILE_DIR, {
-  headless: false,  // Headful trên local, headless trên CI nếu buộc phải
-  channel: 'chrome',
-  args: [
-    '--start-maximized',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-features=ImprovedCookieControls,LazyFrameLoading,GlobalMediaControls,DestroyProfileOnBrowserClose,MediaRouter',
-    '--allow-running-insecure-content',
-    '--disable-extensions-except=/path/to/metamask', // Nếu cần
-    '--disable-infobars',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-web-security', // Cẩn thận, chỉ dùng nếu cần
-    '--disable-site-isolation-trials',
-    '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-    '--disable-ipc-flooding-protection',
-  ],
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  locale: 'en-US',
-  timezoneId: 'America/New_York',
-  permissions: ['geolocation'],
-});
+    const context = await chromium.launchPersistentContext(CHROME_PROFILE_DIR, {
+      headless: false,
+      channel: 'chrome',
+      viewport: { width: 1920, height: 1080 },
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=ImprovedCookieControls,LazyFrameLoading,GlobalMediaControls,DestroyProfileOnBrowserClose,MediaRouter',
+        '--allow-running-insecure-content',
+        '--disable-infobars',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-site-isolation-trials',
+        '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+        '--disable-ipc-flooding-protection',
+      ],
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      permissions: ['geolocation'],
+    });
     await use(context);
     // Cleanup
     await context.close().catch(() => {});

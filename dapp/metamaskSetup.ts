@@ -67,6 +67,12 @@ export async function setupMetaMask(
     version: MetaMaskWallet.recommendedVersion,
     seed: SEED_PHRASE,
     headless: false,
+    browserArgs: ['--window-size=1920,1080'],
+  });
+
+  // Set viewport for all pages in context
+  context.on('page', (page) => {
+    page.setViewportSize({ width: 1920, height: 1080 }).catch(() => {});
   });
 
   console.log(`✅ [Worker ${workerIndex}] MetaMask bootstrap completed`);
