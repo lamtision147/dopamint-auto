@@ -768,8 +768,8 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                         console.log('   ✅ Pressed Enter to verify');
                     }
 
-                    // Wait for verification result
-                    await googlePopup.waitForTimeout(3000);
+                    // Wait for verification result (5 seconds to let Google process)
+                    await googlePopup.waitForTimeout(5000);
 
                     // Check if popup closed (success) or still on 2FA page (failed)
                     if (googlePopup.isClosed()) {
@@ -778,9 +778,14 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                         break;
                     }
 
-                    const stillOn2FA = googlePopup.url().includes('/challenge/');
+                    const currentUrl = googlePopup.url();
+                    const stillOn2FA = currentUrl.includes('/challenge/');
                     const wrongCodeVisible = await googlePopup.locator('text=Wrong code').isVisible({ timeout: 1000 }).catch(() => false);
                     const tryAgainVisible = await googlePopup.locator('text=Try again').isVisible({ timeout: 500 }).catch(() => false);
+
+                    // Detailed logging for debugging
+                    console.log(`   📊 Debug: stillOn2FA=${stillOn2FA}, wrongCode=${wrongCodeVisible}, tryAgain=${tryAgainVisible}`);
+                    console.log(`   📍 Current URL: ${currentUrl.substring(0, 80)}...`);
 
                     if (!stillOn2FA && !wrongCodeVisible && !tryAgainVisible) {
                         // Might have moved to consent screen or similar
@@ -805,7 +810,12 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                                 break;
                             }
                             console.log(`   ⏳ Waiting ${TOTP_RETRY_DELAY_MS / 1000}s for next TOTP window...`);
-                            await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
+                            try {
+                                await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
+                            } catch (e) {
+                                console.log('   ❌ Google popup closed during wait - cannot retry');
+                                break;
+                            }
                         }
                     }
                 } else {
@@ -822,7 +832,12 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                             break;
                         }
                         console.log(`   ⏳ Waiting ${TOTP_RETRY_DELAY_MS / 1000}s before retry...`);
-                        await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
+                        try {
+                            await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
+                        } catch (e) {
+                            console.log('   ❌ Google popup closed during wait - cannot retry');
+                            break;
+                        }
                     }
                 }
             }
