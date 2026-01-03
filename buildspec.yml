@@ -36,26 +36,20 @@ phases:
       - mkdir -p test-results
       - mkdir -p auth
       # Create .env.telegram for Telegram notifications
-      - |
-        cat > .env.telegram << EOF
-        TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-        TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-        TELEGRAM_THREAD_ID=${TELEGRAM_THREAD_ID}
-        EOF
+      - echo "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}" > .env.telegram
+      - echo "TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}" >> .env.telegram
+      - echo "TELEGRAM_THREAD_ID=${TELEGRAM_THREAD_ID}" >> .env.telegram
       # Create .env.test for test credentials
-      - |
-        cat > .env.test << EOF
-        DOPAMINT_EMAIL=${DOPAMINT_EMAIL}
-        DOPAMINT_PASSWORD=${DOPAMINT_PASSWORD}
-        METAMASK_SEED_PHRASE=${METAMASK_SEED_PHRASE}
-        GMAIL_EMAIL=${GMAIL_EMAIL}
-        GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
-        GOOGLE_EMAIL=${GOOGLE_EMAIL}
-        GOOGLE_PASSWORD=${GOOGLE_PASSWORD}
-        GOOGLE_2FA_SECRET=${GOOGLE_2FA_SECRET}
-        S3_BUCKET=${S3_BUCKET}
-        S3_SESSION_KEY=${S3_SESSION_KEY}
-        EOF
+      - echo "DOPAMINT_EMAIL=${DOPAMINT_EMAIL}" > .env.test
+      - echo "DOPAMINT_PASSWORD=${DOPAMINT_PASSWORD}" >> .env.test
+      - echo "METAMASK_SEED_PHRASE=${METAMASK_SEED_PHRASE}" >> .env.test
+      - echo "GMAIL_EMAIL=${GMAIL_EMAIL}" >> .env.test
+      - echo "GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}" >> .env.test
+      - echo "GOOGLE_EMAIL=${GOOGLE_EMAIL}" >> .env.test
+      - echo "GOOGLE_PASSWORD=${GOOGLE_PASSWORD}" >> .env.test
+      - echo "GOOGLE_2FA_SECRET=${GOOGLE_2FA_SECRET}" >> .env.test
+      - echo "S3_BUCKET=${S3_BUCKET}" >> .env.test
+      - echo "S3_SESSION_KEY=${S3_SESSION_KEY}" >> .env.test
       # Download Google session from S3
       - echo "Downloading Google session from S3..."
       - aws s3 cp s3://${S3_BUCKET}/${S3_SESSION_KEY} auth/googleSession.json || echo "Warning: Could not download session file"
