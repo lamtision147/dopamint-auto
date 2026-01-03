@@ -725,11 +725,22 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
             let totpSuccess = false;
 
             for (let totpAttempt = 1; totpAttempt <= MAX_TOTP_RETRIES && !totpSuccess; totpAttempt++) {
-                // Generate fresh TOTP code for each attempt
+                // Wait until we're in the first 10 seconds of a 30-second window
+                // This gives maximum tolerance for time drift
+                const timeRemaining = authenticator.timeRemaining();
+                if (timeRemaining < 10) {
+                    // Less than 10 seconds left in current window - wait for next window
+                    console.log(`   ⏳ Waiting ${timeRemaining + 5}s for fresh TOTP window...`);
+                    await googlePopup.waitForTimeout((timeRemaining + 5) * 1000);
+                }
+
+                // Generate fresh TOTP code
                 const totpCode = authenticator.generate(GOOGLE_2FA_SECRET);
+                const newTimeRemaining = authenticator.timeRemaining();
                 console.log(`\n🔑 TOTP Attempt ${totpAttempt}/${MAX_TOTP_RETRIES}`);
                 console.log(`   Code: ${totpCode}`);
                 console.log(`   Time: ${new Date().toISOString()}`);
+                console.log(`   Time remaining in window: ${newTimeRemaining}s`);
                 console.log(`   Secret (first 4): ${GOOGLE_2FA_SECRET.substring(0, 4)}...`);
 
                 // Find and fill 2FA input (6-digit TOTP)
