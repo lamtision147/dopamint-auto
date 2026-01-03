@@ -781,21 +781,35 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                     if (stillOn2FA || wrongCodeVisible || tryAgainVisible) {
                         console.log(`   ⚠️ TOTP attempt ${totpAttempt} failed: Wrong code or time sync issue`);
 
-                        // Take debug screenshot
-                        const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
-                        await googlePopup.screenshot({ path: `${outputDir}/totp-attempt-${totpAttempt}.png` });
+                        // Take debug screenshot (only if popup still open)
+                        if (!googlePopup.isClosed()) {
+                            const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+                            await googlePopup.screenshot({ path: `${outputDir}/totp-attempt-${totpAttempt}.png` }).catch(() => {});
+                        }
 
                         if (totpAttempt < MAX_TOTP_RETRIES) {
+                            // Check if popup is still open before waiting
+                            if (googlePopup.isClosed()) {
+                                console.log('   ❌ Google popup closed after wrong code - cannot retry');
+                                break;
+                            }
                             console.log(`   ⏳ Waiting ${TOTP_RETRY_DELAY_MS / 1000}s for next TOTP window...`);
                             await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
                         }
                     }
                 } else {
                     console.log('   ⚠️ TOTP input not found');
-                    const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
-                    await googlePopup.screenshot({ path: `${outputDir}/totp-input-not-found-${totpAttempt}.png` });
+                    if (!googlePopup.isClosed()) {
+                        const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
+                        await googlePopup.screenshot({ path: `${outputDir}/totp-input-not-found-${totpAttempt}.png` }).catch(() => {});
+                    }
 
                     if (totpAttempt < MAX_TOTP_RETRIES) {
+                        // Check if popup is still open before waiting
+                        if (googlePopup.isClosed()) {
+                            console.log('   ❌ Google popup closed - cannot retry');
+                            break;
+                        }
                         console.log(`   ⏳ Waiting ${TOTP_RETRY_DELAY_MS / 1000}s before retry...`);
                         await googlePopup.waitForTimeout(TOTP_RETRY_DELAY_MS);
                     }
