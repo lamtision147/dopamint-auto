@@ -770,9 +770,14 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                     }
 
                     // Wait for verification result (5 seconds to let Google process)
-                    await googlePopup.waitForTimeout(5000);
+                    try {
+                        await googlePopup.waitForTimeout(5000);
+                    } catch (e) {
+                        // Popup closed during wait - this could be success!
+                        console.log('   ℹ️ Popup closed during verification wait');
+                    }
 
-                    // Check if popup closed (success) or still on 2FA page (failed)
+                    // Check if popup closed (success!)
                     if (googlePopup.isClosed()) {
                         console.log('   ✅ TOTP verification successful - popup closed!');
                         totpSuccess = true;
