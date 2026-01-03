@@ -10,7 +10,8 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 
 // Get 2FA secret from environment (after loading env)
-const GOOGLE_2FA_SECRET = process.env.GOOGLE_2FA_SECRET || '';
+// Normalize: remove spaces and convert to uppercase for Base32
+const GOOGLE_2FA_SECRET = (process.env.GOOGLE_2FA_SECRET || '').replace(/\s/g, '').toUpperCase();
 
 export class DopamintLoginPage {
     readonly context: BrowserContext;
@@ -741,7 +742,7 @@ if (!this.page) throw new Error("Page not initialized. Call navigateAndLogin fir
                 console.log(`   Code: ${totpCode}`);
                 console.log(`   Time: ${new Date().toISOString()}`);
                 console.log(`   Time remaining in window: ${newTimeRemaining}s`);
-                console.log(`   Secret (first 4): ${GOOGLE_2FA_SECRET.substring(0, 4)}...`);
+                console.log(`   Secret: ${GOOGLE_2FA_SECRET.substring(0, 4)}...${GOOGLE_2FA_SECRET.slice(-4)} (${GOOGLE_2FA_SECRET.length} chars)`);
 
                 // Find and fill 2FA input (6-digit TOTP)
                 const totpInput = googlePopup.locator('input[type="tel"]').or(
