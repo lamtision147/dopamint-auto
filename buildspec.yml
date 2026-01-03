@@ -25,10 +25,13 @@ phases:
       nodejs: 20
     commands:
       - echo "Installing dependencies..."
+      # Sync system time with NTP (critical for TOTP 2FA)
+      - apt-get update && apt-get install -y xvfb dbus-x11 ntpdate
+      - echo "Syncing system time with NTP..."
+      - ntpdate -u pool.ntp.org || ntpdate -u time.google.com || true
+      - echo "Current system time:" && date
       - npm ci
       - npx playwright install chromium --with-deps
-      # Install xvfb for virtual display (needed for headed browser with extensions)
-      - apt-get update && apt-get install -y xvfb dbus-x11
 
   pre_build:
     commands:
