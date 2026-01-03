@@ -8,9 +8,16 @@ env:
     DOPAMINT_EMAIL: "dopamint-secrets:DOPAMINT_EMAIL"
     DOPAMINT_PASSWORD: "dopamint-secrets:DOPAMINT_PASSWORD"
     METAMASK_SEED_PHRASE: "dopamint-secrets:METAMASK_SEED_PHRASE"
+    GMAIL_EMAIL: "dopamint-secrets:GMAIL_EMAIL"
+    GMAIL_APP_PASSWORD: "dopamint-secrets:GMAIL_APP_PASSWORD"
+    GOOGLE_EMAIL: "dopamint-secrets:GOOGLE_EMAIL"
+    GOOGLE_PASSWORD: "dopamint-secrets:GOOGLE_PASSWORD"
+    GOOGLE_2FA_SECRET: "dopamint-secrets:GOOGLE_2FA_SECRET"
   variables:
     TEST_FILE: "dopamintLogin.spec.ts,create.spec.ts,searchMintSell.spec.ts"
     TEST_NAME: "Dopamint Auto Test"
+    S3_BUCKET: "dopamint-test-assets"
+    S3_SESSION_KEY: "playwright/googleSession.json"
 
 phases:
   install:
@@ -27,6 +34,7 @@ phases:
     commands:
       - echo "Preparing test environment..."
       - mkdir -p test-results
+      - mkdir -p auth
       # Create .env.telegram for Telegram notifications
       - |
         cat > .env.telegram << EOF
@@ -40,7 +48,17 @@ phases:
         DOPAMINT_EMAIL=${DOPAMINT_EMAIL}
         DOPAMINT_PASSWORD=${DOPAMINT_PASSWORD}
         METAMASK_SEED_PHRASE=${METAMASK_SEED_PHRASE}
+        GMAIL_EMAIL=${GMAIL_EMAIL}
+        GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+        GOOGLE_EMAIL=${GOOGLE_EMAIL}
+        GOOGLE_PASSWORD=${GOOGLE_PASSWORD}
+        GOOGLE_2FA_SECRET=${GOOGLE_2FA_SECRET}
+        S3_BUCKET=${S3_BUCKET}
+        S3_SESSION_KEY=${S3_SESSION_KEY}
         EOF
+      # Download Google session from S3
+      - echo "Downloading Google session from S3..."
+      - aws s3 cp s3://${S3_BUCKET}/${S3_SESSION_KEY} auth/googleSession.json || echo "Warning: Could not download session file"
       # Start D-Bus (required for Chrome)
       - mkdir -p /run/dbus
       - dbus-daemon --system --fork || true
