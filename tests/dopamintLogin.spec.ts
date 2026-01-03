@@ -19,8 +19,44 @@ const LOGIN_EMAIL = process.env.GMAIL_EMAIL || 'vutesttran99@gmail.com';
 const GOOGLE_EMAIL = process.env.GOOGLE_EMAIL || 'vutesttran99@gmail.com';
 const GOOGLE_PASSWORD = process.env.GOOGLE_PASSWORD || '';
 
+// Check if running on CI (CodeBuild, GitHub Actions, etc.)
+const IS_CI = process.env.CI === 'true' || process.env.CODEBUILD_BUILD_ID !== undefined;
+
 // Delay between test cases (15 seconds) - Worker 0 starts immediately
 const TEST_CASE_DELAY_MS = 15000;
+
+// Login results storage
+interface LoginResult {
+  method: string;
+  status: 'PASSED' | 'FAILED' | 'SKIPPED';
+  error?: string;
+}
+
+// Helper to save login results
+function saveLoginResult(result: LoginResult) {
+  const resultsFile = path.join(outputDir, 'login-results.json');
+  let results: LoginResult[] = [];
+
+  // Read existing results
+  if (fs.existsSync(resultsFile)) {
+    try {
+      results = JSON.parse(fs.readFileSync(resultsFile, 'utf-8'));
+    } catch (e) {
+      results = [];
+    }
+  }
+
+  // Update or add result
+  const existingIndex = results.findIndex(r => r.method === result.method);
+  if (existingIndex >= 0) {
+    results[existingIndex] = result;
+  } else {
+    results.push(result);
+  }
+
+  // Save
+  fs.writeFileSync(resultsFile, JSON.stringify(results, null, 2));
+}
 
 // ============================================================
 // Test with MetaMask (for Case 1)
@@ -102,6 +138,13 @@ testWithMetaMask.describe('Login with MetaMask', () => {
   });
 
   testWithMetaMask.afterEach(async ({ context }, testInfo) => {
+    // Save login result
+    saveLoginResult({
+      method: 'MetaMask',
+      status: testInfo.status === 'passed' ? 'PASSED' : 'FAILED',
+      error: testInfo.status !== 'passed' ? testInfo.error?.message : undefined
+    });
+
     if (testInfo.status !== 'passed') {
       console.log('Test FAILED - capturing debug screenshots...');
       const pages = context.pages();
@@ -141,6 +184,13 @@ testWithEmail.describe('Login with Email', () => {
   });
 
   testWithEmail.afterEach(async ({ context }, testInfo) => {
+    // Save login result
+    saveLoginResult({
+      method: 'Email OTP',
+      status: testInfo.status === 'passed' ? 'PASSED' : 'FAILED',
+      error: testInfo.status !== 'passed' ? testInfo.error?.message : undefined
+    });
+
     if (testInfo.status !== 'passed') {
       console.log('Test FAILED - capturing debug screenshots...');
       const pages = context.pages();
@@ -225,6 +275,9 @@ const context = await chromium.launchPersistentContext(CHROME_PROFILE_DIR, {
 testWithGoogle.describe('Login with Google', () => {
   testWithGoogle.describe.configure({ timeout: 180000 }); // 3 minutes for Google OAuth
 
+  // Skip on CI due to TOTP time sync issues - use saved session instead
+  testWithGoogle.skip(IS_CI, 'Google OAuth with 2FA skipped on CI - use saved session for create/searchMintSell tests');
+
   testWithGoogle("Case 3: Login with Google OAuth", async ({ context }) => {
     console.log(`\n🔐 Testing Google OAuth Login with: ${GOOGLE_EMAIL}`);
 
@@ -246,7 +299,18 @@ testWithGoogle.describe('Login with Google', () => {
   });
 
   testWithGoogle.afterEach(async ({ context }, testInfo) => {
-    if (testInfo.status !== 'passed') {
+    // Save login result
+    let status: 'PASSED' | 'FAILED' | 'SKIPPED' = 'FAILED';
+    if (testInfo.status === 'passed') status = 'PASSED';
+    else if (testInfo.status === 'skipped') status = 'SKIPPED';
+
+    saveLoginResult({
+      method: 'Google OAuth',
+      status: status,
+      error: testInfo.status === 'failed' ? testInfo.error?.message : undefined
+    });
+
+    if (testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
       console.log('Test FAILED - capturing debug screenshots...');
       const pages = context.pages();
       for (let i = 0; i < pages.length; i++) {

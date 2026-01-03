@@ -306,6 +306,23 @@ function getCreateInfo(outputDir = '') {
     return null;
 }
 
+// Read login results from file (saved by dopamintLogin test)
+function getLoginResults(outputDir = '') {
+    const dirs = outputDir ? [outputDir, path.join(__dirname, '..', 'test-results')] : [path.join(__dirname, '..', 'test-results')];
+    for (const dir of dirs) {
+        const loginFile = path.join(dir, 'login-results.json');
+        if (fs.existsSync(loginFile)) {
+            try {
+                const content = fs.readFileSync(loginFile, 'utf8');
+                return JSON.parse(content);
+            } catch (e) {
+                console.error('Error reading login-results.json:', e.message);
+            }
+        }
+    }
+    return null;
+}
+
 // Collection to Model mapping for display
 const COLLECTION_TO_MODEL = {
     'Auto Banana - OLD': 'Nano Banana',
@@ -519,13 +536,22 @@ async function main() {
     // Get create info if exists (for create test)
     const createInfo = getCreateInfo(outputDir);
 
+    // Get login results early for summary calculation
+    const loginResultsForSummary = getLoginResults(outputDir);
+
     // Calculate summary for header (will be filled later based on test type)
     let passedCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
     let totalCount = 0;
 
     // Pre-calculate counts for summary in header
-    if (createInfo && Array.isArray(createInfo)) {
+    if (loginResultsForSummary && testFile.toLowerCase().includes('login')) {
+        passedCount = loginResultsForSummary.filter(r => r.status === 'PASSED').length;
+        failedCount = loginResultsForSummary.filter(r => r.status === 'FAILED').length;
+        skippedCount = loginResultsForSummary.filter(r => r.status === 'SKIPPED').length;
+        totalCount = loginResultsForSummary.length;
+    } else if (createInfo && Array.isArray(createInfo)) {
         passedCount = createInfo.filter(r => r.status === 'PASSED').length;
         failedCount = createInfo.filter(r => r.status === 'FAILED').length;
         totalCount = createInfo.length;
@@ -546,36 +572,74 @@ async function main() {
 
     // Add summary in header if we have test results
     if (totalCount > 0) {
-        message += `\n📈 Summary  : ✅ Passed : ${passedCount} | ❌ Failed : ${failedCount}`;
+        let summaryLine = `✅ Passed: ${passedCount} | ❌ Failed: ${failedCount}`;
+        if (skippedCount > 0) {
+            summaryLine += ` | ⏭️ Skipped: ${skippedCount}`;
+        }
+        message += `\n📈 Summary  : ${summaryLine}`;
     }
 
     message += `\n===================`;
 
     // Format based on test type
+    const loginResults = getLoginResults(outputDir);
+
     if (testFile.toLowerCase().includes('login')) {
-        // LOGIN TEST FORMAT - Plain text table (copyable)
-        // Build table manually without HTML tags inside <pre>
-        const w1 = 10, w2 = 8, w3 = 15;
+        // LOGIN TEST FORMAT - Table showing all login methods
+        const w1 = 14, w2 = 10, w3 = 20;
 
         const topLine    = '─'.repeat(w1) + '┬' + '─'.repeat(w2) + '┬' + '─'.repeat(w3);
         const midLine    = '─'.repeat(w1) + '┼' + '─'.repeat(w2) + '┼' + '─'.repeat(w3);
         const bottomLine = '─'.repeat(w1) + '┴' + '─'.repeat(w2) + '┴' + '─'.repeat(w3);
 
-        const header = padCenter('Method', w1) + '│' + padCenter('Status', w2) + '│' + padCenter('NOTE', w3);
-
-        const note = status === 'FAILED' ? 'See error' : '-';
-        const dataRow = padRight('MetaMask', w1) + '│' + padRight(statusText, w2) + '│' + padRight(note, w3);
+        const header = padCenter('Method', w1) + '│' + padCenter('Status', w2) + '│' + padCenter('Note', w3);
 
         message += `\n<pre>`;
         message += `${topLine}\n`;
         message += `${header}\n`;
         message += `${midLine}\n`;
-        message += `${dataRow}\n`;
+
+        // Default login methods if no results file
+        const defaultMethods = [
+            { method: 'MetaMask', status: status === 'PASSED' ? 'PASSED' : 'FAILED' },
+            { method: 'Email OTP', status: status === 'PASSED' ? 'PASSED' : 'FAILED' },
+            { method: 'Google OAuth', status: 'SKIPPED' }
+        ];
+
+        const methods = loginResults || defaultMethods;
+        const errors = [];
+
+        methods.forEach(result => {
+            let statusIcon = '❌Fail';
+            if (result.status === 'PASSED') statusIcon = '✅Pass';
+            else if (result.status === 'SKIPPED') statusIcon = '⏭️Skip';
+
+            let note = '-';
+            if (result.status === 'SKIPPED') note = 'CI: use session';
+            else if (result.status === 'FAILED') note = 'See error below';
+
+            const row = padRight(result.method, w1) + '│' + padCenter(statusIcon, w2) + '│' + padRight(note, w3);
+            message += `${row}\n`;
+
+            if (result.status === 'FAILED' && result.error) {
+                errors.push({ method: result.method, error: result.error });
+            }
+        });
+
         message += `${bottomLine}`;
         message += `</pre>`;
 
-        // Add error details if test failed
-        if (status === 'FAILED' && logFile) {
+        // Add errors section if any
+        if (errors.length > 0) {
+            message += '\n\n💬 <b>Errors:</b>';
+            errors.forEach(e => {
+                const shortError = stripAnsi(e.error).substring(0, 100);
+                message += `\n• <b>${escapeHtml(e.method)}</b>: <code>${escapeHtml(shortError)}</code>`;
+            });
+        }
+
+        // Fallback: Add error details from log file if no login results
+        if (!loginResults && status === 'FAILED' && logFile) {
             const errorDetails = getErrorDetails(logFile);
             if (errorDetails) {
                 const shortError = errorDetails.split('\n')[0].substring(0, 100);
