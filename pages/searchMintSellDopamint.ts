@@ -141,11 +141,12 @@ export class SearchMintSellPage {
         }
     }
 
-async searchAndSelectCollection(searchText: string, targetUrl: string): Promise<Page> {
+async searchAndSelectCollection(searchText: string, targetUrl: string, expectedCollectionName?: string): Promise<Page> {
         console.log(`\n${'='.repeat(60)}`);
         console.log(`🔍 SEARCH FOR COLLECTION`);
         console.log(`${'='.repeat(60)}`);
         console.log(`   Search text: "${searchText}"`);
+        console.log(`   Expected collection name: "${expectedCollectionName || 'N/A'}"`);
         console.log(`   Expected URL: ${targetUrl}`);
 
         // Extract collection address from targetUrl
@@ -208,11 +209,94 @@ async searchAndSelectCollection(searchText: string, targetUrl: string): Promise<
         }
 
         if (dropdownContainer) {
+            // DEBUG: Print all <a> elements in dropdown to understand structure
+            console.log('\n   🔍 DEBUG: Scanning ALL <a> elements in dropdown...');
+            const allLinksInDropdown = dropdownContainer.locator('a[href]');
+            const allLinksCount = await allLinksInDropdown.count().catch(() => 0);
+            console.log(`   Found ${allLinksCount} total <a> elements with href in dropdown`);
+
+            for (let k = 0; k < Math.min(allLinksCount, 10); k++) {
+                const aLink = allLinksInDropdown.nth(k);
+                const aHref = await aLink.getAttribute('href').catch(() => '');
+                const aText = await aLink.textContent().catch(() => '');
+                console.log(`      <a> [${k}]: href="${aHref}", text="${aText?.trim().substring(0, 40)}..."`);
+            }
+
+            // Also check parent dialog for links
+            console.log('\n   🔍 DEBUG: Scanning page for dialog with links...');
+            const dialogLinks = this.page.locator('div[role="dialog"] a[href*="/collections/"], [data-radix-popper-content-wrapper] a[href*="/collections/"]');
+            const dialogLinksCount = await dialogLinks.count().catch(() => 0);
+            console.log(`   Found ${dialogLinksCount} collection links in dialog`);
+
+            for (let k = 0; k < Math.min(dialogLinksCount, 10); k++) {
+                const dLink = dialogLinks.nth(k);
+                const dHref = await dLink.getAttribute('href').catch(() => '');
+                const dText = await dLink.textContent().catch(() => '');
+                console.log(`      Dialog <a> [${k}]: href="${dHref}", text="${dText?.trim().substring(0, 40)}..."`);
+
+                // Check if this matches our target
+                if (dHref && dHref.toLowerCase().includes(targetAddress)) {
+                    const textMatches = expectedCollectionName ?
+                        dText?.toLowerCase().includes(expectedCollectionName.toLowerCase()) :
+                        dText?.toLowerCase().includes(searchText.toLowerCase());
+
+                    if (textMatches) {
+                        console.log(`   ✅ FOUND MATCH in dialog! Clicking...`);
+                        await dLink.scrollIntoViewIfNeeded().catch(() => {});
+                        await dLink.click({ force: true });
+                        await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+                        console.log(`📄 Navigated to: ${this.page.url()}`);
+                        return this.page;
+                    }
+                }
+            }
+
             const maxScrolls = 5; // Increased scan attempts
             for (let scrollAttempt = 0; scrollAttempt <= maxScrolls; scrollAttempt++) {
                 console.log(`\n   --- Scan Attempt ${scrollAttempt + 1}/${maxScrolls + 1} ---`);
-                
-                // Lấy tất cả các elements có thể click được trong dropdown
+
+                // FIRST: Try to find <a> elements with target address directly (most reliable)
+                const directLinks = dropdownContainer.locator(`a[href*="${targetAddress}"], a[href*="${targetAddress.substring(0, 10)}"]`);
+                const directLinkCount = await directLinks.count().catch(() => 0);
+                console.log(`   Found ${directLinkCount} direct links with target address`);
+
+                for (let j = 0; j < directLinkCount; j++) {
+                    const link = directLinks.nth(j);
+                    const linkHref = await link.getAttribute('href').catch(() => '') || '';
+                    const linkText = await link.textContent().catch(() => '') || '';
+
+                    console.log(`      Direct link [${j}]: Text="${linkText.trim().substring(0, 50)}...", Href="${linkHref}"`);
+
+                    // Check if this link matches our expected collection
+                    const hrefMatches = linkHref.toLowerCase().includes(targetAddress);
+                    let textMatches = false;
+                    if (expectedCollectionName) {
+                        textMatches = linkText.toLowerCase().includes(expectedCollectionName.toLowerCase()) ||
+                                      expectedCollectionName.toLowerCase().includes(linkText.trim().toLowerCase());
+                    } else {
+                        textMatches = linkText.toLowerCase().includes(searchText.toLowerCase());
+                    }
+
+                    if (hrefMatches && textMatches) {
+                        console.log(`   ✅ DIRECT MATCH: Found <a> with correct href AND name!`);
+                        await link.scrollIntoViewIfNeeded().catch(() => {});
+                        await link.click({ force: true });
+                        console.log('   ⏳ Clicked. Waiting for navigation...');
+
+                        try {
+                            await this.page.waitForURL(/collections/i, { timeout: 10000 });
+                        } catch (e) {
+                            // URL might already be correct
+                        }
+                        await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+                        console.log(`📄 Navigated to: ${this.page.url()}`);
+                        return this.page;
+                    } else if (hrefMatches) {
+                        console.log(`   ⚠️ Href matches but text doesn't match "${expectedCollectionName}"`);
+                    }
+                }
+
+                // SECOND: Fall back to checking all clickable elements
                 const clickableSelectors = 'a, button, div[role="option"], div[role="button"], li, [onclick], [data-href]';
                 const clickables = dropdownContainer.locator(clickableSelectors);
                 const count = await clickables.count();
@@ -227,71 +311,203 @@ async searchAndSelectCollection(searchText: string, targetUrl: string): Promise<
                     if (!href) href = await el.getAttribute('data-href').catch(() => '') || '';
                     if (!href) href = await el.getAttribute('data-url').catch(() => '') || '';
 
-                    const text = await el.textContent().catch(() => '') || '';
                     const tagName = await el.evaluate((node: any) => node.tagName).catch(() => '');
 
+                    // If element is DIV without href, try multiple methods to find href
+                    if (!href && tagName === 'DIV') {
+                        // Method 1: Find any <a> descendant with href containing collections
+                        const childLink = el.locator('a[href*="/collections/"]').first();
+                        if (await childLink.count().catch(() => 0) > 0) {
+                            href = await childLink.getAttribute('href').catch(() => '') || '';
+                        }
+
+                        // Method 2: Find any <a> descendant (even hidden)
+                        if (!href) {
+                            const anyLink = el.locator('a[href]').first();
+                            if (await anyLink.count().catch(() => 0) > 0) {
+                                href = await anyLink.getAttribute('href').catch(() => '') || '';
+                            }
+                        }
+
+                        // Method 3: Extract href from element's innerHTML using regex
+                        if (!href) {
+                            const innerHTML = await el.evaluate((node: any) => node.innerHTML).catch(() => '');
+                            const hrefMatch = innerHTML.match(/href=["']([^"']*\/collections\/[^"']*)["']/i);
+                            if (hrefMatch) {
+                                href = hrefMatch[1];
+                            }
+                        }
+
+                        // Method 4: Check parent element for href
+                        if (!href) {
+                            const parentHref = await el.evaluate((node: any) => {
+                                let parent = node.parentElement;
+                                for (let i = 0; i < 3 && parent; i++) {
+                                    if (parent.tagName === 'A' && parent.href) {
+                                        return parent.getAttribute('href');
+                                    }
+                                    // Check for child <a> in parent
+                                    const link = parent.querySelector('a[href*="/collections/"]');
+                                    if (link) return link.getAttribute('href');
+                                    parent = parent.parentElement;
+                                }
+                                return '';
+                            }).catch(() => '');
+                            if (parentHref) href = parentHref;
+                        }
+                    }
+
+                    const text = await el.textContent().catch(() => '') || '';
+
                     // Debug log (limited)
-                    if (i < 3 || text.toLowerCase().includes('auto') || href.includes(targetAddress)) {
+                    if (i < 3 || text.toLowerCase().includes(searchText.toLowerCase().substring(0, 8)) || href.toLowerCase().includes(targetAddress)) {
                         console.log(`      [${i}] <${tagName}> Text: "${text.trim().substring(0, 50)}...", Href: "${href}"`);
                     }
 
-                    let matchFound = false;
+                    // === STRICT MATCHING: Verify BOTH name AND href BEFORE clicking ===
+                    const textTrimmed = text.trim();
 
-                    // Check 1: Href contains address (Strict)
-                    if (href.includes('/collections/') && href.toLowerCase().includes(targetAddress)) {
-                        console.log(`   ✅ Found match by HREF address: ${href}`);
-                        matchFound = true;
+                    // DEBUG: If text matches expected name, dump full HTML to see structure
+                    if (expectedCollectionName && textTrimmed.toLowerCase().includes(expectedCollectionName.toLowerCase())) {
+                        console.log(`\n      🔬 DEBUG: Found matching name, dumping HTML structure...`);
+                        const outerHTML = await el.evaluate((node: any) => node.outerHTML).catch(() => '');
+                        console.log(`      OuterHTML (first 500 chars): ${outerHTML.substring(0, 500)}`);
+
+                        // Check all attributes
+                        const allAttrs = await el.evaluate((node: any) => {
+                            const attrs: Record<string, string> = {};
+                            for (const attr of node.attributes) {
+                                attrs[attr.name] = attr.value;
+                            }
+                            return attrs;
+                        }).catch(() => ({}));
+                        console.log(`      All attributes:`, JSON.stringify(allAttrs));
+
+                        // Check parent element
+                        const parentInfo = await el.evaluate((node: any) => {
+                            const parent = node.parentElement;
+                            if (!parent) return null;
+                            return {
+                                tagName: parent.tagName,
+                                href: parent.getAttribute('href'),
+                                className: parent.className,
+                                outerHTML: parent.outerHTML.substring(0, 300)
+                            };
+                        }).catch(() => null);
+                        console.log(`      Parent element:`, JSON.stringify(parentInfo));
                     }
-                    // Check 2: Text contains searchText (New: for items without href)
-                    else if (text.trim().length > 0 && 
-                            (text.trim().toLowerCase() === searchText.toLowerCase() || 
-                             (searchText.length > 5 && text.toLowerCase().includes(searchText.toLowerCase())))) {
-                        console.log(`   ✅ Found match by TEXT matching search query: "${text.trim()}"`);
-                        matchFound = true;
+
+                    // Check href contains target address
+                    const hrefMatchesAddress = href && href.toLowerCase().includes(targetAddress);
+
+                    // Check text matches expected collection name (if provided) or search text
+                    let textMatchesName = false;
+                    if (expectedCollectionName) {
+                        // Strict: text must contain expected collection name
+                        textMatchesName = textTrimmed.toLowerCase().includes(expectedCollectionName.toLowerCase()) ||
+                                          expectedCollectionName.toLowerCase().includes(textTrimmed.toLowerCase());
+                    } else {
+                        // Fallback: text must contain search text
+                        textMatchesName = textTrimmed.toLowerCase().includes(searchText.toLowerCase());
                     }
-                    // Check 3: Text contains partial address
-                    else if (text.toLowerCase().includes(targetAddress.substring(2, 10))) {
-                        console.log(`   ✅ Found match by TEXT partial address`);
+
+                    // Log match status for debugging
+                    if (textMatchesName || hrefMatchesAddress) {
+                        console.log(`      📋 Item analysis:`);
+                        console.log(`         Text: "${textTrimmed.substring(0, 50)}..."`);
+                        console.log(`         Href: "${href}"`);
+                        console.log(`         ✓ Text matches name: ${textMatchesName}`);
+                        console.log(`         ✓ Href matches address: ${hrefMatchesAddress}`);
+                    }
+
+                    // Matching logic - prioritize href if available, otherwise use exact name match
+                    let matchFound = false;
+                    if (hrefMatchesAddress && textMatchesName) {
+                        console.log(`   ✅ PERFECT MATCH: Both name AND href verified!`);
                         matchFound = true;
+                    } else if (hrefMatchesAddress && !expectedCollectionName) {
+                        // No expected name provided, trust href alone
+                        console.log(`   ✅ HREF MATCH: Address verified (no expected name provided)`);
+                        matchFound = true;
+                    } else if (hrefMatchesAddress && !textMatchesName) {
+                        console.log(`   ⚠️ SKIP: Href matches but name doesn't match "${expectedCollectionName}"`);
+                    } else if (!href && textMatchesName && expectedCollectionName) {
+                        // NO HREF AVAILABLE (JS-based navigation) - trust EXACT name match
+                        // Check if text matches EXACTLY (not just contains)
+                        const exactMatch = textTrimmed.toLowerCase() === expectedCollectionName.toLowerCase() ||
+                                          textTrimmed.toLowerCase().startsWith(expectedCollectionName.toLowerCase());
+                        if (exactMatch) {
+                            console.log(`   ✅ EXACT NAME MATCH (no href in DOM - JS navigation)`);
+                            console.log(`      Will click and verify URL after navigation...`);
+                            matchFound = true;
+                        } else {
+                            console.log(`   ⚠️ SKIP: Name contains but not exact match`);
+                        }
+                    } else if (!hrefMatchesAddress && textMatchesName) {
+                        console.log(`   ⚠️ SKIP: Name matches but href doesn't contain target address`);
                     }
 
                     if (matchFound) {
                         console.log('   🖱️ Clicking result...');
-                        
+
                         // Capture current URL to detect navigation
                         const oldUrl = this.page.url();
-                        
+
                         // Setup listener for new page (tab)
                         const newPagePromise = this.context.waitForEvent('page', { timeout: 5000 }).catch(() => null);
-                        
+
                         await el.scrollIntoViewIfNeeded().catch(() => {});
                         await el.click({ force: true });
-                        
-                        console.log('   ⏳ Clicked. Checking for navigation...');
-                        
+
+                        console.log('   ⏳ Clicked. Waiting for navigation...');
+
                         // Check for new page first
                         const newPage = await newPagePromise;
                         if (newPage) {
                              await newPage.waitForLoadState('domcontentloaded');
-                             console.log(`📄 Navigated to new page: ${newPage.url()}`);
-                             return newPage;
+                             const newPageUrl = newPage.url();
+                             console.log(`📄 Navigated to new page: ${newPageUrl}`);
+
+                             // VERIFY URL contains target address
+                             if (newPageUrl.toLowerCase().includes(targetAddress)) {
+                                 console.log(`   ✅ URL VERIFIED: Contains target address!`);
+                                 return newPage;
+                             } else {
+                                 console.log(`   ❌ URL MISMATCH! Expected: ${targetAddress}`);
+                                 console.log(`      Got: ${newPageUrl}`);
+                                 await newPage.close().catch(() => {});
+                                 throw new Error(`Clicked "${textTrimmed}" but navigated to wrong collection. Expected address: ${targetAddress}, Got: ${newPageUrl}`);
+                             }
                         }
-                        
+
                         // Check for URL change on current page
                         try {
                             await this.page.waitForFunction((startUrl) => window.location.href !== startUrl, oldUrl, { timeout: 5000 });
-                            console.log(`📄 URL changed to: ${this.page.url()}`);
+                            const currentUrl = this.page.url();
+                            console.log(`📄 URL changed to: ${currentUrl}`);
+
+                            // VERIFY URL contains target address
+                            if (currentUrl.toLowerCase().includes(targetAddress)) {
+                                console.log(`   ✅ URL VERIFIED: Contains target address!`);
+                            } else {
+                                console.log(`   ❌ URL MISMATCH! Expected: ${targetAddress}`);
+                                console.log(`      Got: ${currentUrl}`);
+                                throw new Error(`Clicked "${textTrimmed}" but navigated to wrong collection. Expected address: ${targetAddress}, Got: ${currentUrl}`);
+                            }
                         } catch (e) {
+                            if (e instanceof Error && e.message.includes('URL MISMATCH')) {
+                                throw e; // Re-throw URL mismatch error
+                            }
                             console.log(`⚠️ URL did not change immediately. Current: ${this.page.url()}`);
                         }
-                        
+
                         // Safe wait for load state
                         try {
                             await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 });
                         } catch (e) {
                             console.log('⚠️ waitForLoadState timed out, continuing anyway...');
                         }
-                        
+
                         return this.page;
                     }
                 }

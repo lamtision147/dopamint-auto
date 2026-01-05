@@ -124,8 +124,8 @@ async function runSearchMintSellFlow(
     // Click Search button on header
     await searchMintSellPage.clickSearchButton();
 
-    // Search for collection and navigate to details (pass expectedCollectionUrl for precise matching)
-    const collectionPage = await searchMintSellPage.searchAndSelectCollection(searchText, expectedCollectionUrl);
+    // Search for collection and navigate to details (pass expectedCollectionUrl and collectionName for precise matching)
+    const collectionPage = await searchMintSellPage.searchAndSelectCollection(searchText, expectedCollectionUrl, collectionName);
 
     // ========== PHASE 3: VERIFY COLLECTION TITLE ==========
     console.log('\n========== PHASE 3: VERIFY COLLECTION TITLE ==========');

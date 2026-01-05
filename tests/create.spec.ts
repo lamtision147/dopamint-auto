@@ -55,6 +55,55 @@ export const test = baseTest.extend<{
     },
 });
 
+// Helper: Save partial progress for recovery in afterEach
+function savePartialProgress(model: string, data: { collectionName?: string; mintedCount?: number; collectionUrl?: string; collectionType?: string }) {
+    const safeModelName = model.toLowerCase().replace(/\s+/g, '-');
+    const progressPath = path.resolve(outputDir, `progress-${safeModelName}.json`);
+
+    // Read existing progress if any
+    let existing: Record<string, unknown> = {};
+    if (fs.existsSync(progressPath)) {
+        try {
+            existing = JSON.parse(fs.readFileSync(progressPath, 'utf8'));
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    // Merge with new data
+    const merged = { ...existing, ...data };
+    fs.writeFileSync(progressPath, JSON.stringify(merged, null, 2));
+}
+
+// Helper: Get partial progress for a model
+function getPartialProgress(model: string): { collectionName?: string; mintedCount?: number; collectionUrl?: string; collectionType?: string } | null {
+    const safeModelName = model.toLowerCase().replace(/\s+/g, '-');
+    const progressPath = path.resolve(outputDir, `progress-${safeModelName}.json`);
+
+    if (fs.existsSync(progressPath)) {
+        try {
+            return JSON.parse(fs.readFileSync(progressPath, 'utf8'));
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+}
+
+// Helper: Clean up progress file after test completes
+function cleanupProgress(model: string) {
+    const safeModelName = model.toLowerCase().replace(/\s+/g, '-');
+    const progressPath = path.resolve(outputDir, `progress-${safeModelName}.json`);
+
+    if (fs.existsSync(progressPath)) {
+        try {
+            fs.unlinkSync(progressPath);
+        } catch (e) {
+            // ignore
+        }
+    }
+}
+
 // Helper function to run create flow for any model
 async function runCreateFlowWithModel(
     model: AIModel,
@@ -124,6 +173,10 @@ async function runCreateFlowWithModel(
     // Wait for Published Successfully
     await createPage.waitForPublishSuccess();
 
+    // Save partial progress: collection published successfully
+    savePartialProgress(model, { collectionName, collectionType: 'bonding' });
+    console.log(`📝 Saved partial progress: collectionName="${collectionName}"`);
+
     // Screenshot after successful publish
     await dappPage.screenshot({ path: `${outputDir}/publish-success.png` });
 
@@ -159,6 +212,11 @@ async function runCreateFlowWithModel(
     // Wait for mint success (up to 3-4 minutes)
     const mintedCount = await createPage.waitForMintSuccess(collectionPage);
     console.log(`Successfully minted ${mintedCount} NFT!`);
+
+    // Get collection URL and save partial progress: mint successful
+    const collectionUrlFromPage = collectionPage.url();
+    savePartialProgress(model, { mintedCount, collectionUrl: collectionUrlFromPage });
+    console.log(`📝 Saved partial progress: mintedCount=${mintedCount}, collectionUrl=${collectionUrlFromPage}`);
 
     // Screenshot mint success
     await collectionPage.screenshot({ path: `${outputDir}/mint-success.png` });
@@ -203,6 +261,9 @@ async function runCreateFlowWithModel(
 
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
     console.log(`✅ Create info saved to ${modelInfoPath}`);
+
+    // Clean up progress file after successful completion
+    cleanupProgress(model);
 
     await dappPage.waitForTimeout(3000);
 
@@ -280,6 +341,10 @@ async function runCreateFlowFairLaunch(
     // Wait for Published Successfully
     await createPage.waitForPublishSuccess();
 
+    // Save partial progress: collection published successfully
+    savePartialProgress('fair-launch', { collectionName, collectionType: collectionType });
+    console.log(`📝 Saved partial progress: collectionName="${collectionName}" (Fair Launch)`);
+
     // Screenshot after successful publish
     await dappPage.screenshot({ path: `${outputDir}/publish-success-fairlaunch.png` });
 
@@ -320,6 +385,10 @@ async function runCreateFlowFairLaunch(
     const mintedCount = await createPage.waitForMintSuccess(collectionPage);
     console.log(`Successfully minted ${mintedCount} NFT!`);
 
+    // Save partial progress: mint successful
+    savePartialProgress('fair-launch', { mintedCount, collectionUrl });
+    console.log(`📝 Saved partial progress: mintedCount=${mintedCount} (Fair Launch)`);
+
     // Screenshot mint success
     await collectionPage.screenshot({ path: `${outputDir}/mint-success-fairlaunch.png` });
 
@@ -348,6 +417,9 @@ async function runCreateFlowFairLaunch(
 
     fs.writeFileSync(modelInfoPath, JSON.stringify(result, null, 2));
     console.log(`✅ Create info saved to ${modelInfoPath}`);
+
+    // Clean up progress file after successful completion
+    cleanupProgress('fair-launch');
 
     await dappPage.waitForTimeout(3000);
 
@@ -409,21 +481,31 @@ test.describe('Create NFT Flow', () => {
             // Determine if this is a Fair Launch test
             const isFairLaunch = model === 'Fair Launch';
             const actualModel = isFairLaunch ? 'ChatGPT image 1.5' : model;
+            const progressKey = isFairLaunch ? 'fair-launch' : model;
             const safeModelName = isFairLaunch ? 'fair-launch' : model.toLowerCase().replace(/\s+/g, '-');
             const modelInfoPath = path.resolve(outputDir, `create-info-${safeModelName}.json`);
 
+            // Get partial progress if available (collection may have been published before failure)
+            const partialProgress = getPartialProgress(progressKey);
+            if (partialProgress) {
+                console.log(`📝 Found partial progress for ${model}:`, partialProgress);
+            }
+
             const failedResult = {
                 model: actualModel,
-                collectionName: 'N/A',
-                mintedCount: 0,
+                collectionName: partialProgress?.collectionName || 'N/A',
+                mintedCount: partialProgress?.mintedCount || 0,
                 status: 'FAILED',
                 error: testInfo.error?.message || 'Unknown error',
-                collectionUrl: '',
-                collectionType: isFairLaunch ? 'fairlaunch' : 'bonding'
+                collectionUrl: partialProgress?.collectionUrl || '',
+                collectionType: partialProgress?.collectionType || (isFairLaunch ? 'fairlaunch' : 'bonding')
             };
 
             fs.writeFileSync(modelInfoPath, JSON.stringify(failedResult, null, 2));
             console.log(`❌ Failed result saved to ${modelInfoPath}`);
+
+            // Clean up progress file
+            cleanupProgress(progressKey);
         }
 
         console.log(`Test "${testInfo.title}" has ended with status: ${testInfo.status}`);
